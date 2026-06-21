@@ -17,6 +17,57 @@
 
 两模式只差「质量门跑在哪层」，其余流程一致。
 
+## Claude Code 专属：Workflow 工具编排（推荐，规避主会话上下文膨胀）
+
+模式 A 用 `Agent` 工具派 owner agent，子 agent 的全部输出追加到主会话上下文，长程任务容易撑爆。**Claude Code 改用 `Workflow` 工具**——脚本后台运行，完成后只返回最终报告，主上下文不膨胀。
+
+**主会话操作**：读取 `tasks.md`，按 `depends_on` 归组成波次数组，调用 `Workflow` 工具并将波次作为 `args` 传入：
+
+```javascript
+export const meta = {
+  name: 'code-gen-waves',
+  description: '按波次并行执行代码生成任务',
+  phases: [{ title: '执行' }, { title: '汇总' }],
+}
+
+const RESULT_SCHEMA = {
+  type: 'object',
+  required: ['taskId', 'status', 'summary'],
+  properties: {
+    taskId:  { type: 'string' },
+    status:  { type: 'string', enum: ['完成', '需人工', '阻塞'] },
+    summary: { type: 'string' },
+    issues:  { type: 'array', items: { type: 'string' } },
+  },
+}
+
+// args.waves: [[{ id, title, context, acceptance }, ...], ...]
+// 波次顺序执行（满足 depends_on 语义），波内任务并行
+const allResults = []
+for (const wave of args.waves) {
+  phase('执行')
+  const waveResults = await parallel(wave.map(task => () =>
+    agent(
+      `你是 ${task.id} 的 owner agent。\n` +
+      `任务：${task.title}\nContext：${task.context}\n验收标准：${task.acceptance}\n\n` +
+      `完成后依次执行：\n` +
+      `1. 加载 workflow-code-review（skip_reviewers: [magical-prompt-reviewer]）并修复\n` +
+      `2. 若存在 verify.config.json，加载 workflow-verification 并修复\n` +
+      `3. 只返回结论，不输出完整 diff`,
+      { label: task.id, phase: '执行', schema: RESULT_SCHEMA, isolation: 'worktree' }
+    )
+  ))
+  allResults.push(...waveResults.filter(Boolean))
+}
+
+phase('汇总')
+return { results: allResults }
+```
+
+Workflow 完成后，主会话拿到 `results` 数组，逐条更新 `tasks.md` 状态字段，继续后续波次或进入 SKILL 步骤 6。
+
+> **与 Phase 1 的关系**：本方案替代 Phase 1 中「主会话用 `Agent` 工具 dispatch」的部分；失败隔离、合并、`tasks.md` 状态写回的逻辑由 owner agent 在脚本内执行，规则与 Phase 1 一致。
+
 ## Phase 0：准备
 
 1. **加载编码规范**（步骤 4 已做）。
@@ -60,3 +111,13 @@
 3. **重载规范 → 重建依赖波 → 继续下放执行**，直至全部 task 为 `完成` / `需人工` / `阻塞`（`阻塞` 项须待其上游经人工解决后下次续跑再处理，本身即可接受终态）。
 
 完成后**必须回到 SKILL 步骤 6** 做交付前沉淀检查、给逐条判定结论再宣布交付——**恢复路径不豁免步骤 6**。
+
+## 其他 CLI 工具（如 Codex）的上下文控制
+
+无内置 Workflow 机制时，依赖**批次隔离 + 状态文件持久化**控制上下文：
+
+1. **`tasks.md` 作为唯一真相源**：每个 CLI session 启动前读 `tasks.md`，结束后把状态（`完成` / `需人工` / `阻塞`）写回，不依赖会话内存。
+2. **每次只跑一个波次**：取同一 wave 的独立任务启动新 session，跑完即退出，避免单 session 上下文累积。
+3. **只返回摘要**：session prompt 明确要求只输出 `{ taskId, status, summary, issues }`，代码变更落到文件，不在会话内展开完整 diff / 日志。
+4. **批次间压缩**：每波结束、主会话读取结果后执行 `/compact`，再续下一波。
+5. **Codex 进阶**：`codex mcp-server` 暴露为 MCP 工具，由 OpenAI Agents SDK 外部编排，可实现类似 Workflow 的 session 隔离（参考 [OpenAI Cookbook](https://developers.openai.com/cookbook/examples/codex/codex_mcp_agents_sdk/building_consistent_workflows_codex_cli_agents_sdk)）。

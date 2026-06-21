@@ -86,7 +86,7 @@ tasks.md 经用户批准后，执行下放给 agent：**主会话只编排，不
 - **模式 A（默认，Claude Code 支持嵌套）**：每 task 派 owner 子 agent 自闭环——实现 → 内嵌测试 → 自跑 review → 自跑 verify → 有限轮次自修复，主 agent 只收集结论。
 - **模式 B（兜底，不支持嵌套）**：implementer 只实现 + 写 / 跑测试，review / verify 由主 agent 对每个产物跑。
 
-**详细操作（Phase 0 准备 / Phase 1 逐波执行 / 失败隔离 / 合并 / 阻塞）见 [reference/delegated-execution-guide.md](reference/delegated-execution-guide.md)，按其执行。** 核心不变量：每产物必过 review + verify 才合并；失败标 `需人工` 不阻塞其余；上游未合并则下游 `阻塞`；`tasks.md` 的 `状态:` 字段是续跑真相源。
+**详细操作（Phase 0 准备 / Phase 1 逐波执行 / 失败隔离 / 合并 / 阻塞）见 [reference/delegated-execution-guide.md](reference/delegated-execution-guide.md)，按其执行。** 核心不变量：每产物必过 review + verify 才合并；失败标 `需人工` 不阻塞其余；上游未合并则下游 `阻塞`；`tasks.md` 的 `状态:` 字段是续跑真相源。Claude Code 使用 `Workflow` 工具替代 `Agent` 工具以规避主会话上下文膨胀，详见上方 reference 手册。
 
 ### 步骤 6：功能交付与 intent 沉淀（🚨 强制，全部 task 完成后触发）
 
