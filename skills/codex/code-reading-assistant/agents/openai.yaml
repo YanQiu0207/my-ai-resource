@@ -1,0 +1,8 @@
+interface:
+  display_name: "代码解读助手"
+  short_description: "从代码逻辑到调用链与核心对象的多角度解读辅助技能"
+  default_prompt: "Use $code-reading-assistant 分析这段代码，按 2 到 3 个关键角度输出逻辑、调用链和核心对象。"
+
+policy:
+  allow_implicit_invocation: false
+

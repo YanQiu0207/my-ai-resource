@@ -1,0 +1,228 @@
+# Claude Code 与 Codex 省 Token 实践
+
+> 更新日期：2026-06-21  
+> 适用对象：日常使用 Claude Code 和 Codex 做代码阅读、修改、测试、Review、文档整理的个人或团队。
+
+## 结论
+
+省 token 的核心不是少打几个字，而是**减少 agent 反复读取无关上下文**。
+
+Claude Code 和 Codex 的官方建议高度一致：
+
+- 缩小任务范围。
+- 控制会话上下文。
+- 把长期规则写短。
+- 把专项流程做成按需加载的 Skill / rules。
+- 避免中途切模型、切 effort、改 MCP 或插件导致缓存失效。
+
+## 最实用的技巧
+
+### 1. 一件事一个会话 / 线程
+
+**建议**：
+
+- Claude Code：无关任务切换时用 `/clear`；长任务在自然断点用 `/compact <重点>`。
+- Codex：一个线程只处理一个 coherent unit of work，不要把一个项目长期塞在同一个线程里。
+
+**原因**：
+
+- 旧对话、文件读取结果、工具输出会持续挤占上下文。
+- 上下文越大，每轮调用越容易浪费 token，也更容易让 agent 被旧信息干扰。
+
+### 2. Prompt 用「4 段式」
+
+推荐模板：
+
+```text
+目标：只做 X。
+上下文：重点看 A/B/C 文件；不要全仓库扫描。
+约束：只做最小改动；不要重构无关代码。
+完成标准：跑某个最小测试 / lint / 复现命令，通过后停止。
+```
+
+这样可以减少 agent 的探索范围，避免它因为任务模糊而全仓库搜索、反复读文件。
+
+### 3. `CLAUDE.md` / `AGENTS.md` 要短
+
+**建议**：
+
+- 只放每次任务都需要知道的内容，例如项目结构、构建命令、测试命令、核心约束。
+- 不要把长流程、低频规范、专项 Review 清单全部塞进去。
+- 如果文件开始变长，把专项内容拆到 Skill、rules、或单独 Markdown 文档。
+
+**原因**：
+
+- Claude Code 的 `CLAUDE.md` 会在 session 开始时加载。
+- Codex 的 `AGENTS.md` 会自动进入上下文。
+- 长规则文件会让每个任务都背上不相关的上下文成本。
+
+### 4. 专项流程做成 Skill，而不是长 prompt
+
+适合做成 Skill 的内容：
+
+- PR Review 流程。
+- 安全检查流程。
+- Markdown 规范化流程。
+- OpenSpec / spec 工作流。
+- 仓库学习、架构梳理、测试生成等重复任务。
+
+原因：
+
+- Skill 通常按需加载。
+- 平时只暴露名称、描述和路径，不会把完整正文一开始就塞进上下文。
+- 复杂流程沉淀为 Skill 后，可以少解释、多复用。
+
+### 5. 少开没用的 MCP / 插件 / 工具
+
+**建议**：
+
+- 不用的 MCP server 关掉。
+- 能用 CLI 工具解决的，优先用 `gh`、`aws`、`gcloud`、`sentry-cli` 等命令。
+- 不要为了「可能用得上」把一堆 MCP 和插件默认打开。
+
+**原因**：
+
+- MCP 工具定义、插件能力说明可能进入上下文或影响缓存。
+- 工具越多，agent 决策空间越大，也越容易做多余探索。
+
+### 6. 不要在长会话中途频繁切模型 / effort / fast mode
+
+**建议**：
+
+- 会话开始时先选好模型和 effort。
+- 长会话中途尽量不要频繁切换。
+- Codex 的 Fast mode 是「更快但消耗更多 credits」，不是省钱模式。
+
+**原因**：
+
+- Claude Code 的 prompt cache 依赖前缀精确匹配。
+- 切模型、切 effort、连接 / 断开 MCP、启用 / 禁用插件、compact 等动作，都可能让下一轮请求重新处理大量上下文。
+
+### 7. 模型和 reasoning 按任务难度选
+
+**Claude Code**：
+
+- 简单明确任务：优先用较便宜、较快的模型。
+- 普通编码任务：常规模型即可。
+- 复杂架构、多步推理、疑难 Debug：再切到更强模型。
+
+**Codex**：
+
+- 简单、边界清晰的小任务：低 reasoning。
+- 多文件修改、复杂调试：Medium / High。
+- 长链路、强推理、跨模块任务：Extra High。
+
+原则：不要把所有任务都当成最高推理任务。
+
+### 8. 大日志、大测试输出先过滤
+
+**建议**：
+
+- 不要直接把 10,000 行日志丢给 agent。
+- 用 `grep`、`rg`、测试 runner 参数、hook 或脚本先筛选失败片段。
+- 测试输出只给失败用例、错误栈、相关上下文。
+
+例子：
+
+```bash
+pytest 2>&1 | grep -A 5 -E "(FAIL|ERROR|error:)" | head -100
+```
+
+收益：
+
+- 从几万 token 降到几百 token。
+- 减少 agent 被无关成功日志干扰。
+
+### 9. Subagent 要克制使用
+
+**适合使用 subagent 的场景**：
+
+- 并行代码审查。
+- 多方向根因排查。
+- 大范围资料搜索。
+- 希望把大量探索隔离在子上下文里，只让主线程拿摘要。
+
+**不适合使用 subagent 的场景**：
+
+- 单文件小改。
+- 目标非常明确的小修复。
+- 已经知道准确位置和验证命令的任务。
+
+原因：每个 subagent 都会消耗自己的模型和工具调用，可能比单 agent 更耗 token。
+
+## 社区信号
+
+### GitHub
+
+Claude Code 和 Codex 都有官方 GitHub 仓库，仓库 README 都把官方文档作为主要入口。省 token 策略仍应以官方文档为准，GitHub 仓库更适合查看安装方式、已知问题、插件和开源实现。
+
+### X / 媒体报道
+
+围绕 Claude Code Review 的讨论集中在「深度 Review 会消耗更多 compute / token」上。媒体报道提到，Claude Code Review 这类深度检查可能按 PR 复杂度产生较高费用。实践结论是：
+
+- 小 PR 不要无脑跑深度、多 agent Review。
+- 先用轻量检查和最小测试覆盖基础问题。
+- 只有复杂、高风险 PR 再启用更深的 Review。
+
+### Reddit
+
+我只找到 Reddit 相关二手报道，未找到足以直接引用的一手帖子。二手报道中有人声称，通过依赖图式上下文层可以让 Claude Code 更快、更省。这个案例不能直接当通用事实，但可借鉴的方向是：
+
+- 先定位相关代码。
+- 再把最小必要上下文交给 agent。
+- 避免让 agent 盲目全仓库搜索。
+
+## 我的默认实践清单
+
+每次开任务前，先确认：
+
+- 这是不是一个独立任务？如果不是，拆小。
+- 是否有明确文件范围？如果有，直接告诉 agent。
+- 是否有明确验证命令？如果有，直接写进 prompt。
+- 是否需要高 reasoning？如果不需要，先用低 / 中档。
+- 是否需要 subagent？如果只是小改，不要开。
+- 当前会话是否已经混入太多无关上下文？如果是，先 `/clear` 或新开线程。
+
+## 推荐 Prompt 模板
+
+```text
+请只完成以下任务：
+
+目标：
+- [写清楚要完成什么]
+
+范围：
+- 重点查看：[文件或目录]
+- 不要修改：[文件或目录]
+
+约束：
+- 只做最小改动。
+- 不要重构无关代码。
+- 如果发现不确定点，先停下来说明。
+
+验证：
+- 修改后运行：[命令]
+- 如果命令失败，先分析失败原因，不要扩大修改范围。
+
+交付：
+- 简述改动点。
+- 给出验证结果。
+```
+
+## 参考资料
+
+- [Claude Code：Manage costs effectively](https://docs.anthropic.com/en/docs/claude-code/costs)
+- [Claude Code：Explore the context window](https://code.claude.com/docs/en/context-window)
+- [Claude Code：Prompt caching](https://code.claude.com/docs/en/prompt-caching)
+- [Claude Code：Best practices](https://code.claude.com/docs/en/best-practices)
+- [Claude Code：How Claude remembers your project](https://docs.anthropic.com/en/docs/claude-code/memory)
+- [Codex：Best practices](https://developers.openai.com/codex/learn/best-practices)
+- [Codex：Prompting](https://developers.openai.com/codex/prompting)
+- [Codex：AGENTS.md](https://developers.openai.com/codex/guides/agents-md)
+- [Codex：Skills](https://developers.openai.com/codex/skills)
+- [Codex：Subagents](https://developers.openai.com/codex/subagents)
+- [Codex：Speed](https://developers.openai.com/codex/speed)
+- [GitHub：anthropics/claude-code](https://github.com/anthropics/claude-code)
+- [GitHub：openai/codex](https://github.com/openai/codex)
+- [Business Insider：Claude Code Review token cost discussion](https://www.businessinsider.com/anthropic-claude-code-review-token-costs-developers-backlash-engineers-2026-3)
+- [Economic Times：Reddit 二手报道与 GrapeRoot 案例](https://m.economictimes.com/news/new-updates/100k-savings-in-3-months-techie-says-claude-code-is-now-2x-faster-3x-cheaper-using-this-tool/articleshow/131522412.cms)
