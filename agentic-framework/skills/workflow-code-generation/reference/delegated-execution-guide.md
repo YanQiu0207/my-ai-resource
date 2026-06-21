@@ -4,7 +4,7 @@
 
 ## 编排模型：先判定 CLI 嵌套能力
 
-`workflow-code-review` 要派 reviewer 子 agent。**子 agent 能否再派子 agent**（嵌套 dispatch）决定 review / verify 跑在哪层。
+`workflow-code-review` 会按 task 风险派轻量 / 标准 / 严格 reviewer 集。**子 agent 能否再派子 agent**（嵌套 dispatch）决定 review / verify 跑在哪层。
 
 - **实测**：派一个子 agent，让它再派一个孙 agent 回一句话；成功即支持。
 - Claude Code **支持**嵌套（版本号与来源见框架根 `docs/03-parallel-execution-mode.md`，可能随 CLI 更新而变）；**最终以实测为准**。
@@ -41,7 +41,7 @@ const RESULT_SCHEMA = {
   },
 }
 
-// args.waves: [[{ id, title, context, acceptance }, ...], ...]
+// args.waves: [[{ id, title, context, acceptance, review_profile }, ...], ...]
 // 波次顺序执行（满足 depends_on 语义），波内任务并行
 const allResults = []
 for (const wave of args.waves) {
@@ -49,9 +49,9 @@ for (const wave of args.waves) {
   const waveResults = await parallel(wave.map(task => () =>
     agent(
       `你是 ${task.id} 的 owner agent。\n` +
-      `任务：${task.title}\nContext：${task.context}\n验收标准：${task.acceptance}\n\n` +
+      `任务：${task.title}\nReview 档位：${task.review_profile}\nContext：${task.context}\n验收标准：${task.acceptance}\n\n` +
       `完成后依次执行：\n` +
-      `1. 加载 workflow-code-review（skip_reviewers: [magical-prompt-reviewer]）并修复\n` +
+      `1. 按 task.review_profile 加载 workflow-code-review 并修复\n` +
       `2. 若存在 verify.config.json，加载 workflow-verification 并修复\n` +
       `3. 只返回结论，不输出完整 diff`,
       { label: task.id, phase: '执行', schema: RESULT_SCHEMA, isolation: 'worktree' }
@@ -87,7 +87,7 @@ Workflow 完成后，主会话拿到 `results` 数组，逐条更新 `tasks.md` 
    - 职责见上方编排模型表（A 自闭环 / B 只实现 + 测试）。**测试与实现同批**：接口层与核心逻辑必须有覆盖关键路径、能跑通的测试，不允许先实现后补。
 2. **质量门**：
    - 模式 A：owner 已跑完，主 agent 只**收集**结论。
-   - 模式 B：主 agent 对每个产物（在其 worktree 内）扮演 `workflow-code-review` 的 Judge 派 reviewer（`skip_reviewers: [magical-prompt-reviewer]`）裁决。
+   - 模式 B：主 agent 对每个产物（在其 worktree 内）扮演 `workflow-code-review` 的 Judge，按 task 的 `review_profile` 派 reviewer 裁决。
    - **verify（两模式一致，仅当有 config 或 Phase 0 已采基线）**，在产物所在 worktree 内：
      - 已采基线 → `verify.py --baseline <repo-root>/.verify/baseline.json`（**用绝对路径**；worktree 看不到相对路径基线，会静默跳过基线对比、清零「测试数不得减少」等防回退检查）。绝对路径不可达 → 按门禁故障（ERROR）处理，**不得**静默退回无基线路径。
      - 仅有 config → `verify.py`。
