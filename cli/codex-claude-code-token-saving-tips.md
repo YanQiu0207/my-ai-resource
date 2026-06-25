@@ -1,6 +1,6 @@
 # Claude Code 与 Codex 省 Token 实践
 
-> 更新日期：2026-06-21（补充 10–15 条）  
+> 更新日期：2026-06-25（补充 Codex 上下文窗口、压缩时机与配置文件）
 > 适用对象：日常使用 Claude Code 和 Codex 做代码阅读、修改、测试、Review、文档整理的个人或团队。
 
 ## 结论
@@ -220,6 +220,112 @@ Extended Thinking（深度推理）的 token 用量可以是普通回复的 5–
 - 减少 agent 的决策空间，降低不必要探索的概率。
 - 工具定义本身也占用上下文，工具越多，每轮系统提示越重。
 
+### 16. Claude Code 上下文窗口和压缩配置
+
+**适用**：Claude Code
+
+**上下文窗口大小**：
+
+| 模式 | 大小 | 启用条件 |
+|---|---|---|
+| 标准窗口 | 200,000 tokens | 默认，所有模型（Sonnet / Opus / Haiku / Fable）一致 |
+| 扩展窗口 | 1,000,000 tokens | 使用 `sonnet[1m]` / `opus[1m]` 别名；仅 Max / Team / Enterprise 计划可用 |
+
+**自动压缩触发时机**：
+
+当剩余可用上下文 ≤ 13,000 tokens 时自动触发（即对话内容超过约 167K tokens）。
+
+压缩策略：优先清理旧的工具输出 → 再摘要对话历史 → 保留 CLAUDE.md 和关键代码片段。
+
+**手动控制命令**：
+
+| 命令 | 作用 |
+|---|---|
+| `/context` | 查看当前窗口占用情况 |
+| `/compact [focus]` | 手动压缩，可指定保留重点，如 `/compact focus on API changes` |
+| `/clear` | 清空全部历史，完全重启 |
+
+**配置项**：
+
+`autoCompactEnabled` 写入 `~/.claude.json`（**不是** settings.json，写进 settings.json 无效）：
+
+```json
+{
+  "autoCompactEnabled": false
+}
+```
+
+环境变量（写在项目 `.claude/settings.json` 的 `env` 块）：
+
+| 变量名 | 含义 | 默认值 | 备注 |
+|---|---|---|---|
+| `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` | 触发压缩的上下文占用百分比 | ~95% | 代码内有硬上限，设置超过约 83% 无效（非官方确认） |
+| `CLAUDE_CODE_AUTO_COMPACT_WINDOW` | 用于压缩计算的有效窗口大小（tokens） | 模型原生窗口（200K） | 可缩小有效窗口，再配合百分比触发 |
+| `DISABLE_AUTO_COMPACT` | 完全禁用自动压缩 | 未设置（启用） | 设为 `true` 禁用 |
+
+组合用法示例（更早触发压缩）：
+
+```json
+{
+  "env": {
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "150000",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "80"
+  }
+}
+```
+
+效果：当对话内容达到 12 万 tokens（150K × 80%）时触发压缩。
+
+**建议**：
+
+- 长任务在七成占用时主动 `/compact`，避免被动压缩丢失关键信息。
+- 在 CLAUDE.md 中加 `# Compact instructions` 章节，指定压缩时优先保留哪类内容。
+
+### 17. Codex 上下文窗口和压缩阈值
+
+**适用**：Codex
+
+**结论**：
+
+- Codex 的上下文窗口不是固定值，而是随模型变化；不配置时使用模型或 preset 默认值。
+- 当前线程内的 prompt、模型输出、工具调用、工具输出、读取的文件内容等，都要放进模型的 context window。
+- 长任务中 Codex 可能自动 compact；CLI 可用 `/compact` 手动总结对话并释放 tokens。
+
+**配置文件**：
+
+全局配置：
+
+```text
+C:\Users\<用户名>\.codex\config.toml
+```
+
+项目级配置：
+
+```text
+<repo>\.codex\config.toml
+```
+
+项目级配置优先级高于全局配置；项目 `.codex/` 层只在信任项目后加载。
+
+**建议配置**：
+
+```toml
+# 默认让 Codex 按模型自动识别上下文窗口；除非你非常确定，否则别手动改
+# model_context_window = 128000
+
+# 自动压缩触发阈值，越低越早 compact
+model_auto_compact_token_limit = 64000
+
+# 每个工具输出最多保留多少 tokens，避免大日志污染上下文
+tool_output_token_limit = 12000
+```
+
+**使用建议**：
+
+- 平时优先调 `model_auto_compact_token_limit` 和 `tool_output_token_limit`，不要先改 `model_context_window`。
+- 长任务自然断点可以手动执行 `/compact`，先让 agent 总结「当前决策、关键文件、未完成事项、验证命令」。
+- 如果只想影响一个仓库，把配置放到该仓库的 `.codex/config.toml`；如果希望所有仓库都生效，再放到全局 `~/.codex/config.toml`。
+
 ## 社区信号
 
 ### GitHub
@@ -299,3 +405,6 @@ Claude Code 和 Codex 都有官方 GitHub 仓库，仓库 README 都把官方文
 - [GitHub：openai/codex](https://github.com/openai/codex)
 - [Business Insider：Claude Code Review token cost discussion](https://www.businessinsider.com/anthropic-claude-code-review-token-costs-developers-backlash-engineers-2026-3)
 - [Economic Times：Reddit 二手报道与 GrapeRoot 案例](https://m.economictimes.com/news/new-updates/100k-savings-in-3-months-techie-says-claude-code-is-now-2x-faster-3x-cheaper-using-this-tool/articleshow/131522412.cms)
+- [Codex：Config basics](https://developers.openai.com/codex/config-basic)
+- [Codex：Configuration Reference](https://developers.openai.com/codex/config-reference)
+- [Codex：CLI slash commands](https://developers.openai.com/codex/cli)
