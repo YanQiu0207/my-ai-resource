@@ -14,7 +14,7 @@ expires_hint: "structure track 在版本库提交后自动失效；insights trac
 agentic-framework/
 ├── commands/           用户入口（/xxx slash command → 转发到对应 skill，极薄）
 ├── skills/
-│   ├── workflow-*/     有状态工作流（需求澄清 / 系统设计 / 快速设计 / 代码生成 / 代码评审 / 测试生成 / 验证）
+│   ├── workflow-*/     有状态工作流（需求澄清 / 系统设计 / 快速设计 / 代码生成 / 代码评审 / 测试生成）
 │   ├── bp-*/           最佳实践参考手册（无状态，按需加载）
 │   ├── std-*/          语言编码规范（C++ / Go / Python）
 │   ├── project-knowledge/  文档目录约定 + 知识沉淀规范
@@ -44,8 +44,6 @@ agentic-framework/
 | `workflow-code-generation` | 所有代码变更统一入口，复杂度路由 | 执行编排者 |
 | `workflow-code-review` | 分级并行评审协调（Judge 角色） | 编排 + 最终裁决 |
 | `workflow-test-generation` | 测试生成（可内嵌进代码生成流程） | 实现者 |
-| `workflow-verification` | 客观门禁（verify.py 脚本驱动） | 执行者 |
-
 ## 代码生成执行段的复杂度路由
 
 ```
@@ -53,13 +51,13 @@ agentic-framework/
   ↓
 极轻改动（单文件局部，可直接确定文件列表）？
   ├─ 是 → Fast-Path（主会话直改，无 agent 派发开销）
-  │         → [可选 review] → verify 门禁 → 交付前沉淀检查
+  │         → review → 交付前沉淀检查
   └─ 否 → 标准流程
            → tasks.md 用户批准（最后一道闸）
            → 为每 task 分配 review_profile
            → DAG 分波（按 depends_on 拓扑）
            → 波内并行 dispatch owner agent（各自跑 worktree）
-             → 实现 → 内嵌测试 → review → verify → [自修复] → 合并
+             → 实现 → 内嵌测试 → review → [自修复] → 合并
            → 失败隔离（单 task 失败不停整体，依赖方标「阻塞」）
            → 全部完成 → 汇总报告 → 交付前沉淀检查
 ```

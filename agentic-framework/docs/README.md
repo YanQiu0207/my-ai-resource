@@ -8,7 +8,7 @@
 
 > **快速构建大型但非生产环境的工具/项目，既要快，又要保证质量。**
 
-核心取舍一句话：**前期人把关（需求 + 设计），执行段 AI 自主并行跑**——质量基建（多维 review + 有配置时强制 verify）不打折，但执行不再逐 task 停等。
+核心取舍一句话：**前期人把关（需求 + 设计），执行段 AI 自主并行跑**——质量基建（多维 review）不打折，但执行不再逐 task 停等。
 
 ## 与原框架的关系
 
@@ -28,4 +28,4 @@
 
 ## 一句话结论
 
-**Superpowers 的执行形态（自主 + 并行 + subagent-driven）× `workflow-*` 的质量基建（分级 review + 有配置时强制 verify + 复杂度路由）** —— 拿成熟范本补 `workflow-*` 唯一的执行短板，而不丢它比 Superpowers 强的那几样。
+**Superpowers 的执行形态（自主 + 并行 + subagent-driven）× `workflow-*` 的质量基建（分级 review + 复杂度路由）** —— 拿成熟范本补 `workflow-*` 唯一的执行短板，而不丢它比 Superpowers 强的那几样。

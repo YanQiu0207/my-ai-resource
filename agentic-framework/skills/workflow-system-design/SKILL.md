@@ -65,6 +65,7 @@ AI 通过提问帮助用户发现问题和权衡：
 |------|----------|
 | `bp-architecture-design` Skill | 讨论 4.1 方案概览时加载 |
 | `bp-component-design` Skill | 讨论 4.2 组件设计时加载 |
+| `bp-cola-ddd` Skill | 讨论 4.1 方案概览，需求涉及多外部依赖、业务规则较多或需要 DDD 分层隔离时加载，指导分层结构与 gateway 边界决策 |
 | `bp-distributed-systems` Skill | 涉及网络通信、多节点协调、数据一致性、故障恢复时加载 |
 | `bp-performance-optimization` Skill | 4.3 核心逻辑完成后加载，优化性能方面的设计考量 |
 | `workflow-test-generation` Skill | 讨论 7. 测试计划时加载 |
