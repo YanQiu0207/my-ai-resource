@@ -1,0 +1,195 @@
+{
+  "_comment": "corpus-research 行为层 GT（多 case）。评测对象是 skill 真跑产出的报告，不是 SKILL.md 静态文本。每个 case 一个 question + 召回真值。must_recall 必须出现在报告的『相关文章/单篇摘要』区；should_not_include 若出现在该区即误纳。每篇用唯一锚词标识，归一化后子串匹配。key_facts 供 C 层 check_facts.py 做事实覆盖检查。配套：checks/check_recall.py、checks/check_facts.py。所有 must_recall 均基于实读全文标注。",
+  "corpus": "E:/work/gongzhonghao_md",
+  "cases": [
+    {
+      "id": "skill-eval-methods",
+      "split": "dev",
+      "question": "Skill 评测有哪些方法 / 框架？",
+      "mode": "穷举罗列：召回该主题下全部方法",
+      "must_recall": [
+        {"id": "harness-rubric", "anchors": ["长程自动化", "Rubrics as Rewards"], "note": "Rubric 四层评测"},
+        {"id": "skill-evolver", "anchors": ["自己训练自己", "8 阶段 Loop", "5 维 AND 门控"], "note": "skill-evolver 自进化"},
+        {"id": "harness-eval", "anchors": ["撕掉了遮羞布", "三角色"], "note": "Harness Eval 考试系统"},
+        {"id": "skilltrustbench", "anchors": ["SkillTrustBench"], "note": "Skill 安全评测基准"},
+        {"id": "iterative-skill", "anchors": ["迭代式编写"], "note": "双层验证"},
+        {"id": "qoderwork", "anchors": ["QoderWork"], "note": "四层结构 + TDD"},
+        {"id": "enterprise-skill", "anchors": ["企业购"], "note": "知识工程，40%→90%"},
+        {"id": "ai-agent-skill-eval", "anchors": ["测评方案及落地实践", "三类评委"], "note": "Agent & Skill 测评方案：三类评委 + 五维度，真跑发现的核心遗漏"}
+      ],
+      "should_not_include": [
+        {"id": "aacr-bench", "anchors": ["氛围编程", "AACR"], "note": "代码评审 Benchmark，非 Skill 评测"},
+        {"id": "rock-roll", "anchors": ["ROCK&ROLL", "ROCK ROLL", "Agentic RL"], "note": "RL 训练框架，无关"}
+      ],
+      "key_facts": [
+        {"fact": "Rubric 条目分 Essential/Important/Optional/Pitfall", "anchors": ["Essential", "Pitfall"]},
+        {"fact": "skill-evolver 的 5 维 AND 门控不是加权求和", "anchors": ["AND 门控", "不是加权"]},
+        {"fact": "Meta-Harness：只给分数比给完整 trace 差 44%", "anchors": ["44%"]},
+        {"fact": "Harness Eval 三角色分离", "anchors": ["三角色"]},
+        {"fact": "质量瓶颈在知识工程", "anchors": ["知识工程"]},
+        {"fact": "Agent/Skill 测评分三类评委：确定性/Rubric/人工", "anchors": ["三类评委"]}
+      ]
+    },
+    {
+      "id": "skill-evolver-focus",
+      "split": "dev",
+      "question": "skill-evolver 是怎么让 Skill 自我迭代和评测的？",
+      "mode": "聚焦深挖：只应召回核心一篇，测会不会过度发散召回",
+      "must_recall": [
+        {"id": "skill-evolver", "anchors": ["自己训练自己", "8 阶段 Loop", "5 维 AND 门控"], "note": "唯一直接讲 skill 自我迭代的文章"}
+      ],
+      "should_not_include": [
+        {"id": "aacr-bench", "anchors": ["氛围编程", "AACR"], "note": "代码评审，无关"},
+        {"id": "rock-roll", "anchors": ["ROCK&ROLL", "Agentic RL"], "note": "RL 框架，无关"}
+      ],
+      "key_facts": [
+        {"fact": "8 阶段 Loop", "anchors": ["8 阶段", "Phase"]},
+        {"fact": "三层评测 L1/L2/L3", "anchors": ["三层评测", "L1"]},
+        {"fact": "5 维 AND 门控不是加权求和", "anchors": ["AND 门控", "不是加权"]},
+        {"fact": "trace 诊断比只给分数好", "anchors": ["44%", "trace"]}
+      ]
+    },
+    {
+      "id": "rubric-vs-exam",
+      "split": "dev",
+      "question": "Rubric 评测和考试式（Harness Eval）评测有什么区别？",
+      "mode": "对比：应同时召回两篇被对比的文章",
+      "must_recall": [
+        {"id": "harness-rubric", "anchors": ["长程自动化", "Rubrics as Rewards"], "note": "Rubric 评测代表"},
+        {"id": "harness-eval", "anchors": ["撕掉了遮羞布", "三角色"], "note": "考试式评测代表"}
+      ],
+      "should_not_include": [
+        {"id": "aacr-bench", "anchors": ["氛围编程", "AACR"], "note": "代码评审，无关"},
+        {"id": "rock-roll", "anchors": ["ROCK&ROLL", "Agentic RL"], "note": "RL 框架，无关"}
+      ],
+      "key_facts": [
+        {"fact": "Rubric 是清单式分级打分", "anchors": ["Essential", "Pitfall"]},
+        {"fact": "考试式强调三角色分离与归因", "anchors": ["三角色", "归因"]}
+      ]
+    },
+    {
+      "id": "skill-security",
+      "split": "holdout",
+      "question": "怎么评估一个 Skill 是否安全可信？",
+      "mode": "安全角度：应召回安全评测专文，不应混入功能评测或代码评审",
+      "must_recall": [
+        {"id": "skilltrustbench", "anchors": ["SkillTrustBench"], "note": "唯一 Skill 安全评测基准"}
+      ],
+      "should_not_include": [
+        {"id": "aacr-bench", "anchors": ["氛围编程", "AACR"], "note": "代码评审安全，不是 Skill 安全"},
+        {"id": "rock-roll", "anchors": ["ROCK&ROLL", "Agentic RL"], "note": "RL 框架，无关"}
+      ],
+      "key_facts": [
+        {"fact": "按攻击手段分 T01-T09", "anchors": ["T01", "T09"]},
+        {"fact": "高召回不等于可落地", "anchors": ["高召回", "误报"]}
+      ]
+    },
+    {
+      "id": "token-optimization",
+      "split": "holdout",
+      "question": "如何降低 AI Agent 的 token 消耗？",
+      "mode": "跨主题 holdout：与 Skill 评测完全不同的主题，防过拟合主力",
+      "must_recall": [
+        {"id": "token-cost-control", "anchors": ["Token 成本控制"], "note": "AI Coding Agent token 降本五层方法总纲（日常/路由/工具层/代码图谱/多 Agent），真跑发现的核心遗漏"},
+        {"id": "token-economics", "anchors": ["Token 经济学", "同样额度多干 3 倍"], "note": "token 消耗机制与优化"},
+        {"id": "agent-memory", "anchors": ["节省 61", "上下文卸载", "Mermaid 无限画布"], "note": "上下文卸载压缩短期记忆"}
+      ],
+      "should_not_include": [
+        {"id": "lobster-class", "anchors": ["龙虾公开课"], "note": "线下活动，无关" },
+        {"id": "talent-plan", "anchors": ["犀牛鸟"], "note": "招募活动，无关"}
+      ],
+      "key_facts": [
+        {"fact": "上下文卸载到外部文件", "anchors": ["上下文卸载"]},
+        {"fact": "system prompt 和对话历史是 token 大头", "anchors": ["System Prompt", "对话历史"]}
+      ]
+    },
+    {
+      "id": "harness-engineering",
+      "split": "dev",
+      "question": "Harness Engineering 是什么？有哪些核心组件 / 模式？",
+      "mode": "概念 + 组件梳理：跨多篇 Harness 专文",
+      "must_recall": [
+        {"id": "harness-six-components", "anchors": ["六大组件", "四大硬伤"], "note": "裸模型四大硬伤 + Harness 六大组件"},
+        {"id": "harness-patterns", "anchors": ["核心模式与理念", "深入浅出 Harness"], "note": "Harness 核心模式与理念"}
+      ],
+      "should_not_include": [
+        {"id": "rock-roll", "anchors": ["ROCK&ROLL", "Agentic RL"], "note": "RL 框架，无关"},
+        {"id": "lobster-class", "anchors": ["龙虾公开课"], "note": "线下活动，无关"}
+      ],
+      "key_facts": [
+        {"fact": "Harness 六大组件补救裸模型四大硬伤", "anchors": ["六大组件", "四大硬伤"]}
+      ]
+    },
+    {
+      "id": "agentic-engineering",
+      "split": "holdout",
+      "question": "什么是 Agentic Engineering？它和 Vibe Coding 有何不同？",
+      "mode": "概念辨析：跨主题 holdout",
+      "must_recall": [
+        {"id": "agentic-first-principle", "anchors": ["第一性原理", "agentic-engineering-framework"], "note": "从第一性原理思考 Agentic Engineering"},
+        {"id": "agentic-revolution", "anchors": ["认知重建", "工程革命"], "note": "步入 Agentic Engineering 的工程革命"}
+      ],
+      "should_not_include": [
+        {"id": "rock-roll", "anchors": ["ROCK&ROLL", "Agentic RL"], "note": "RL 框架，无关"},
+        {"id": "lobster-class", "anchors": ["龙虾公开课"], "note": "线下活动，无关"}
+      ],
+      "key_facts": [
+        {"fact": "Engineering 本质是约束优化", "anchors": ["约束优化"]},
+        {"fact": "对立面是 Vibe Coding", "anchors": ["Vibe Coding"]}
+      ]
+    },
+    {
+      "id": "multi-agent",
+      "split": "dev",
+      "question": "如何设计一个生产级的 multi-agent 系统？",
+      "mode": "架构设计：含理论方案与实战两类",
+      "must_recall": [
+        {"id": "multi-agent-harness", "anchors": ["Multi-Agent Harness", "MCP 工具接入"], "note": "生产级 Multi-Agent Harness 全拆解"},
+        {"id": "openclaw-six-agent", "anchors": ["六个 AI Agent", "交易蜘蛛"], "note": "一个人六个 Agent 实战"}
+      ],
+      "should_not_include": [
+        {"id": "rock-roll", "anchors": ["ROCK&ROLL", "Agentic RL"], "note": "RL 框架，无关"},
+        {"id": "lobster-class", "anchors": ["龙虾公开课"], "note": "线下活动，无关"}
+      ],
+      "key_facts": [
+        {"fact": "覆盖架构/评估/记忆/成本/MCP 多方面", "anchors": ["MCP"]}
+      ]
+    },
+    {
+      "id": "build-agent",
+      "split": "holdout",
+      "question": "如何从零搭建一个 AI Agent？",
+      "mode": "入门搭建：概念 / 框架 / 实践三条路径",
+      "must_recall": [
+        {"id": "build-from-zero", "anchors": ["零废话", "从 0 构建 AI Agent"], "note": "从概念到 Agent Loop 系统讲解"},
+        {"id": "design-agent-framework", "anchors": ["从零开始设计实现", "ReAct 模式"], "note": "Agent 框架设计完整指南"},
+        {"id": "build-0-to-1", "anchors": ["从 0 到 1 搭建 Agent", "越用越懂你的记忆系统"], "note": "原理 + 个人助手实践"}
+      ],
+      "should_not_include": [
+        {"id": "rock-roll", "anchors": ["ROCK&ROLL", "Agentic RL"], "note": "RL 框架，无关"},
+        {"id": "lobster-class", "anchors": ["龙虾公开课"], "note": "线下活动，无关"}
+      ],
+      "key_facts": [
+        {"fact": "核心抽象是 Agent Loop + Tool Calling", "anchors": ["Agent Loop", "Tool Calling"]}
+      ]
+    },
+    {
+      "id": "agent-eval",
+      "split": "dev",
+      "question": "如何评测一个 AI Agent（不是 Skill、不是模型）？",
+      "mode": "Agent 评测：易与 Skill 评测 / 模型评测混淆，重点测主题精准度",
+      "must_recall": [
+        {"id": "ai-agent-skill-eval", "anchors": ["测评方案及落地实践", "三类评委"], "note": "最系统的 Agent & Skill 测评方案（三类评委 + 五维度），真跑发现的核心遗漏"},
+        {"id": "shopping-guide-eval", "anchors": ["智能导购"], "note": "导购 Agent 端到端评测链路"},
+        {"id": "business-agent-eval", "anchors": ["搭建式业务", "业务 Agent 评测"], "note": "Harness 工程搭建式业务 Agent 评测方案"}
+      ],
+      "should_not_include": [
+        {"id": "skilltrustbench", "anchors": ["SkillTrustBench"], "note": "Skill 安全评测，不是 Agent 评测"},
+        {"id": "heartbench", "anchors": ["HeartBench", "人味儿"], "note": "模型拟人化评测，不是 Agent 评测"}
+      ],
+      "key_facts": [
+        {"fact": "用 LLM-as-a-judge + 人工校准", "anchors": ["LLM-as-a-judge", "人工校准"]}
+      ]
+    }
+  ]
+}

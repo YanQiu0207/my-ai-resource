@@ -1,0 +1,75 @@
+{
+  "_comment": "corpus-research 的静态规则守护 GT，对接 skill-evolver 的 LocalEvaluator。评测对象是 SKILL.md 全文（静态文本），不是运行输出。regression split 守护关键规则不被未来迭代删除；dev split 是期望具备的规则；holdout 验证泛化。行为层评测（真跑 skill 看召回）需另用 ScriptEvaluator，不在此文件。",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "[regression] 主题校验规则必须存在，防止关键词重叠误纳（AACR-Bench 坑）",
+      "assertions": [
+        {"type": "contains", "value": "主题校验", "description": "第 5 步保留主题校验小节"},
+        {"type": "contains", "value": "关键词重叠但主题不同", "description": "质量门禁含关键词重叠校验项"}
+      ],
+      "split": "regression",
+      "metadata": {"note": "守护 2026-06-27 新增的防误纳规则"}
+    },
+    {
+      "id": 2,
+      "prompt": "[regression] 对等笔记规则必须存在，防止凭印象压缩（skill-evolver 坑）",
+      "assertions": [
+        {"type": "contains", "value": "详尽度要对等", "description": "第 7 步要求笔记详尽度对等"},
+        {"type": "contains", "value": "凭印象", "description": "质量门禁禁止凭印象压缩"}
+      ],
+      "split": "regression",
+      "metadata": {"note": "守护 2026-06-27 新增的对等笔记规则"}
+    },
+    {
+      "id": 3,
+      "prompt": "[regression] 综合密度均衡规则必须存在，防止厚此薄彼",
+      "assertions": [
+        {"type": "contains", "value": "信息密度要均衡", "description": "第 8 步要求综合密度均衡"},
+        {"type": "contains", "value": "厚此薄彼", "description": "质量门禁含密度均衡校验项"}
+      ],
+      "split": "regression",
+      "metadata": {"note": "守护 2026-06-27 新增的密度均衡规则"}
+    },
+    {
+      "id": 4,
+      "prompt": "[regression] 子 agent 执行边界与高召回基线不能丢",
+      "assertions": [
+        {"type": "contains", "value": "主会话只负责确认输入", "description": "保留主会话/子 agent 职责边界"},
+        {"type": "contains", "value": "逐篇阅读全文", "description": "保留逐篇全文阅读要求"},
+        {"type": "contains", "value": "不能把搜索命中片段当成最终证据", "description": "保留反 top-k-片段定证据规则"}
+      ],
+      "split": "regression",
+      "metadata": {"note": "守护 skill 的核心架构与召回基线"}
+    },
+    {
+      "id": 5,
+      "prompt": "review my corpus and answer a question, what structure should the report have",
+      "assertions": [
+        {"type": "contains", "value": "## 覆盖范围", "description": "报告结构含覆盖范围"},
+        {"type": "contains", "value": "## 不确定性", "description": "报告结构含不确定性"},
+        {"type": "regex", "value": "20\\s*篇", "description": "全文阅读默认上限 20 篇"}
+      ],
+      "split": "dev"
+    },
+    {
+      "id": 6,
+      "prompt": "how should I expand search terms for high recall",
+      "assertions": [
+        {"type": "contains", "value": "高召回", "description": "强调高召回"},
+        {"type": "contains", "value": "同义词", "description": "检索词扩展含同义词"},
+        {"type": "contains", "value": "不承诺", "description": "明确不承诺绝对不遗漏，改为报告实际覆盖（正向匹配，避免 not_contains 误判否定语境）"}
+      ],
+      "split": "dev"
+    },
+    {
+      "id": 7,
+      "prompt": "what must the final answer report include about coverage limits",
+      "assertions": [
+        {"type": "contains", "value": "排除原因", "description": "未入选资料需说明排除原因"},
+        {"type": "contains", "value": "不确定", "description": "需区分并说明不确定资料"}
+      ],
+      "split": "holdout"
+    }
+  ]
+}
