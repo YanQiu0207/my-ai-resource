@@ -232,11 +232,13 @@ AI："4.2.3 数据模型这个 section，你的需求涉及新的数据结构吗
 
 ## 设计完成后
 
+**前端分支检查**：spec.md 涉及前端 UI（新页面 / 新组件 / 用户操作路径 / `.tsx` 产物）时，进入编码前**先调用 `workflow-frontend-design`** 生成 `ui-spec.md`，再回到本流程。这与 `workflow-quick-design` 的前端分支对齐，避免到 `workflow-code-generation` 步骤 2 才因缺少 ui-spec 被动停下。
+
 ```
 spec.md 设计部分已完成。
 
 你可以：
-- 说"开始编码"进入 code generation 阶段
+- 说"开始编码"进入 code generation 阶段（涉及前端 UI 时先走 /frontend-design 生成 ui-spec.md）
 - 说"先写测试"进入 TDD 模式
 - 如果某个 section 需要修改，告诉我具体哪个
 ```

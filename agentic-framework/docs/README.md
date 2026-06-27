@@ -25,6 +25,7 @@
 | [03-parallel-execution-mode.md](03-parallel-execution-mode.md) | `code-generation` 执行段（下放 agent + 并行）的设计规格 | 实现 / 理解执行段时 |
 | [04-compound-engineering-comparison.md](04-compound-engineering-comparison.md) | compound-engineering-plugin 调研 + 与本框架对比 + 吸收决策 | 了解知识沉淀机制设计依据时 |
 | [05-industry-comparison.md](05-industry-comparison.md) | 与 Superpowers / OpenSpec / Spec Kit / Taskmaster / ce-compound 的横向对比 | 评估框架定位 / 选型决策时 |
+| [06-official-frontend-skills-installation.md](06-official-frontend-skills-installation.md) | 官方前端 skills 本地化来源与保留流程 | 理解本地前端 workflow 来源时 |
 
 ## 一句话结论
 

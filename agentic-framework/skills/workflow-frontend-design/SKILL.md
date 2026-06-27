@@ -1,133 +1,180 @@
 ---
 name: workflow-frontend-design
-description: 前端 UI 设计工作流。代码实现前生成 2-3 个 HTML 静态方案让用户在浏览器中预览选择，产出 UI 规格，作为 workflow-code-generation 的视觉契约。
+description: 通用前端 UI 工作流入口。检测到新页面、复杂新组件、绿地 Web App、Dashboard、Landing Page、前端重设计或明显视觉改版时使用；极轻 UI 调整或单文件小组件改动直接走 workflow-code-generation。基于 Anthropic frontend-design 与 OpenAI frontend-app-builder 的中文化本地版本：先做有观点的设计方向和完整概念，再沉淀 ui-spec.md，最后交给 workflow-code-generation 实现与浏览器验证。
 ---
 
 > 输出一行：`Using workflow-frontend-design`
 
 # 前端 UI 设计
 
-## 适用场景
+## 官方规则本地化
 
-任何涉及用户界面的功能，在 spec 确认后、代码实现前调用：
-- 新页面 / 新组件
-- 现有页面的大幅改版
-- 交互流程设计
+### 设计负责人视角
 
-极轻 UI 调整（仅改样式 / 修文案）→ 跳过，直接进 `workflow-code-generation`。
+把自己当成小型设计工作室的设计负责人。用户不是要模板，而是要一个清晰、独特、能解释的视觉观点。
 
-## 前置条件
+必须做：
 
-**需要用户在本机有 Chrome 或已安装 Playwright**。开始前确认：
+- 明确产品主题、受众和页面唯一任务。
+- 从产品自身世界提取视觉语言：材料、工具、场景、行业物件、用户习惯。
+- 对色彩、字体、布局做明确选择，并说明原因。
+- 至少承担一个可解释的审美风险。
 
+避免：
+
+- 默认紫色渐变、统一大圆角、泛用 Bento、过多居中布局。
+- 无意义 eyebrow / kicker / badge / pill。
+- 假指标、假标签、装饰性图标堆叠。
+- 只做 Hero，不做完整页面。
+
+### 概念先于实现
+
+实现前必须先产出设计概念。概念一旦被用户接受，就视为生产规格。
+
+规则：
+
+1. 先设计完整请求面：页面、状态、核心流程和响应式延展。
+2. 多 section 页面按 section 保持节奏，不要用一张模糊长图或一个压缩概念糊弄。
+3. 接受后的概念不能随意改文案、层级、容器模型、色彩、字体、密度和 section 顺序。
+4. 编码前抽取设计系统：tokens、字体、组件族、间距、图标、容器、动效。
+5. 新复杂应用默认 React + Vite；既有项目遵循项目技术栈。
+6. 完成标准是浏览器实现与接受概念高度一致；有明显设计评审意见就继续修。
+
+## 本框架接线
+
+本 skill 不探测 Claude Code / Codex 外部技能。官方能力已本地化到本目录。
+
+闭环由本地 workflow 承担；官方技能能力拆到各阶段：
+
+```text
+workflow-frontend-design（定方向 / 出概念 / 产出 ui-spec）
+  → bp-frontend-layout（页面骨架）
+  → workflow-code-generation + std-react（实现 / 生成 tasks.md）
+  → workflow-test-generation（tasks 中的测试任务）
+  → bp-frontend-taste（视觉质检）
+  → frontend-playwright-verification（最终浏览器验证）
+  → 失败则回到实现修复
 ```
-UI 方案需要在浏览器中预览。请确认你有以下任一工具：
-- Chrome / Edge / Safari（直接打开 HTML 文件预览）
-- Playwright（已安装：npx playwright --version）
-```
-
----
 
 ## 工作流程
 
-### Step 1：理解 UI 需求
+### Step 1：读取 spec
 
-**防御性检查**：先确认 `docs/design-docs/<module>/<feature>/spec.md` 存在。若不存在，立即停止并告知用户：
+确认 `docs/design-docs/<module>/<feature>/spec.md` 存在。不存在则停止：
 
-```
+```text
 缺少 spec.md，无法提取 UI 需求。请先运行 /requirements-clarification 或 /quick-design 生成功能规格，再调用本工作流。
 ```
 
-spec.md 存在后，从中提取：
-- 页面 / 组件的功能目标与用户场景
-- 数据结构（展示哪些字段、哪些是核心信息）
-- 已知约束（品牌色 / 现有组件库 / 响应式要求）
+读取：
 
-如界面需求有明显信息缺口，一次问完（不分轮）。信息足够则直接进入 Step 2。
+- 页面目标、用户、核心任务。
+- 必须出现的 section、数据、状态、操作。
+- 品牌、技术栈、组件库、响应式和验收约束。
 
-### Step 2：生成 HTML 方案
+只问会阻塞设计的问题；不要问「喜欢什么风格」。
 
-**不询问用户**，直接生成 **2-3 个** 设计方向各异的静态 HTML 文件：
+### Step 2：出 2-3 个 HTML 方案
 
-- 单文件，Tailwind CSS CDN 引入，无需构建工具即可在浏览器直接打开
-- 每个方案体现不同设计方向，例如：
-  - 方案 A：简约 / 信息克制
-  - 方案 B：信息密度高 / 功能导向
-  - 方案 C：卡片式 / 视觉层次强
-- 每个方案必须包含：正常态 / 空态 / 加载态 / 错误态
+生成 2-3 个单文件 HTML：
 
-加载 `bp-frontend-taste` 确保视觉质量达标。
+- 路径：`docs/design-docs/<module>/<feature>/ui-mockup-A.html`。
+- Tailwind CDN，可直接打开。
+- 方向必须明显不同，但业务事实一致。
+- 必须包含正常态、空态、加载态、错误态。
+- 必须体现桌面和移动端布局。
 
-**文件路径**：`docs/design-docs/<module>/<feature>/ui-mockup-A.html`（B、C 以此类推）
+每个方案说明：
 
-### Step 3：用户选择
+- 主题语境。
+- 色彩与字体。
+- 布局骨架。
+- 组件语言。
+- 视觉记忆点。
 
-生成完告知用户：
+### Step 3：等用户选择
 
-```
+输出：
+
+```text
 已生成 N 个 UI 方案，请在浏览器中打开对比：
 
-- 方案 A（路径）：[一句话描述设计方向]
-- 方案 B（路径）：[一句话描述设计方向]
-- 方案 C（路径，如有）：[一句话描述设计方向]
+- 方案 A（路径）：[一句话说明方向]
+- 方案 B（路径）：[一句话说明方向]
+- 方案 C（路径，如有）：[一句话说明方向]
 
 请告知选择哪个方案，或需要融合哪些元素。
 ```
 
-等待用户选择。
+用户确认前不要写实现代码。
 
-### Step 4：迭代调整（通常 1-2 轮）
+### Step 4：确定布局骨架并产出 ui-spec
 
-根据用户反馈在选定方案基础上调整，直到用户确认。
+用户选定方案后，先**加载 `bp-frontend-layout`**，确定页面类型、区域划分、主操作位置、容器模型、section 节奏和响应式塌缩，把结果写进下方模板的「布局骨架」section。
 
-### Step 5：产出 UI 规格
-
-将确认方案整理为 `docs/design-docs/<module>/<feature>/ui-spec.md`：
+随后写入 `docs/design-docs/<module>/<feature>/ui-spec.md`，**每个 section 必须填实，不得只留空标题**：
 
 ```markdown
 # UI 规格：<feature>
 
 ## 选定方案
-[方案 X，一句话描述]
+[方案 X + 一句话方向]
+
+## 页面唯一任务
+[这个页面 / 组件要让用户完成的唯一任务]
+
+## 设计方向
+[主题语境、受众、承担的可解释审美风险]
+
+## 设计 Tokens
+[背景 / Surface / 文本 / 弱文本 / 边框 / 主色 / 语义色，给具体色值]
+
+## 字体系统
+[标题 / 正文 / 标签 / 控件文字的字体、字号、字重、行高层级]
+
+## 布局骨架
+[由 bp-frontend-layout 写入：页面类型、区域划分、主操作位置、容器模型、桌面布局、移动端布局]
 
 ## 组件清单
 - [组件名]：[职责]
 
-## 交互行为
-- hover / focus / active 状态
+## 交互与状态
+- hover / focus / active / disabled
 - 空态：[描述]
 - 加载态：[描述]
 - 错误态：[描述 + 重试入口]
 
-## 响应式断点
+## 响应式
 - 移动端（< 768px）：[布局说明]
 - 桌面端（≥ 1024px）：[布局说明]
 
-## 关键设计决策
-- [决策 + 原因]
+## 保真清单
+[实现必须对齐的视觉要点，供 bp-frontend-taste 收尾质检对照]
+
+## 浏览器验证点
+[必须在浏览器验证的关键流程与渲染结果，供 frontend-playwright-verification 对照]
 ```
 
-告知用户 UI 规格路径，**立即加载 `workflow-code-generation`**，并在步骤 2 中将 `ui-spec.md` 路径显式传入：
+### Step 5：进入实现
 
-```
+输出：
+
+```text
 UI 规格已产出：docs/design-docs/<module>/<feature>/ui-spec.md
-正在进入代码实现阶段，加载 workflow-code-generation（步骤 2 将一并读取 spec.md 与 ui-spec.md）。
+正在进入代码实现阶段，加载 workflow-code-generation。
+tasks.md 必须包含实现任务、测试任务和最终浏览器验证任务。
 ```
-
----
 
 ## 强制规则
 
-1. **先出方案再让用户选**：不问「你想要什么风格」，直接给 2-3 个方向
-2. **HTML 必须单文件、可直接在浏览器打开**：禁止依赖 npm / 构建步骤
-3. **必须包含非正常态**：空态 / 加载态 / 错误态，禁止只做 happy path
-4. **必须加载 `bp-frontend-taste`**：确保视觉质量基线
+1. 不检测外部 CLI 技能。
+2. 不跳过概念确认。
+3. 不只做 Hero。
+4. 不把接受后的概念重新解释一遍再实现。
+5. 产出 ui-spec 前必须加载 `bp-frontend-layout` 写实「布局骨架」；ui-spec 各 section 不得留空标题。
+6. 可见 UI 完成后必须走 `bp-frontend-taste` 和 `frontend-playwright-verification`。
 
-## 反模式
+## 参考来源
 
-| ❌ | ✅ |
-|----|-----|
-| 问「你喜欢什么风格？」 | 直接生成 2-3 个不同方向 |
-| HTML 需要 npm install 才能预览 | Tailwind CDN，单文件直接开 |
-| 只有正常态 | 包含空态、加载态、错误态 |
-| 跳过 UI 设计直接写代码 | 视觉契约先于实现 |
+- Anthropic `frontend-design`：<https://github.com/anthropics/skills/tree/main/skills/frontend-design>
+- OpenAI `build-web-apps / frontend-app-builder`：<https://github.com/openai/plugins/tree/main/plugins/build-web-apps>
