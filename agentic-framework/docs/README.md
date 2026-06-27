@@ -27,6 +27,7 @@
 | [05-industry-comparison.md](05-industry-comparison.md) | 与 Superpowers / OpenSpec / Spec Kit / Taskmaster / ce-compound 的横向对比 | 评估框架定位 / 选型决策时 |
 | [06-official-frontend-skills-installation.md](06-official-frontend-skills-installation.md) | 官方前端 skills 本地化来源与保留流程 | 理解本地前端 workflow 来源时 |
 | [07-critical-review.md](07-critical-review.md) | 框架独立批判性评估（短板 + 改进，标注已补项） | 审视框架短板 / 规划后续改进时 |
+| [08-evaluation-strategy.md](08-evaluation-strategy.md) | 评测体系分层落地（Tier 0 结构门卫 / Tier 1 触发 / Tier 2 效果 / Tier 3 自进化）+ 框架特有难点 | 规划 / 落地 skill 评测时 |
 
 ## 工具脚本
 
@@ -35,7 +36,7 @@
 | 脚本 | 用途 |
 | --- | --- |
 | `install_agentic_framework.py` | 把 `skills/` / `agents/` / `commands/` 安装进目标目录的 `.claude` 与 `.codex` |
-| `lint_skill_graph.py` | 静态校验 skill 引用图：dangling（引用不存在的目标）、command 目标缺失、name/目录名一致、orphan（无人引用的 skill） |
+| `lint_skill_graph.py` | 静态校验 skill 引用图（评测体系 Tier 0 / L1 门卫）：dangling、command 目标缺失、name/目录名一致、frontmatter description 完整、review 档位→reviewer 映射闭环、orphan |
 | `lint_task_deps.py` | 校验 tasks.md 依赖：dangling 依赖、循环依赖、以及「改同一文件却无依赖关系」的并行冲突（提示补 `depends_on`） |
 
 `lint_skill_graph.py` 两种用法：

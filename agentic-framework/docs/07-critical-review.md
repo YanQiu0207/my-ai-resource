@@ -25,6 +25,7 @@
 **3. token 成本无显式预算闸。** 3 档 × 5 维 + critic + 并行 agent + worktree，对功能多的大工具是数量级开销，地板偏高，无显式预算上限。
 
 **4. 方法论是断言而非实测。** 框架对自身有效性没有度量——并行执行是否真比串行缺陷更少，没有 benchmark；手握 `skill-evolver`（带 eval harness）却没拿它验证 workflow skill 本身。
+> 🟡 **部分补**：评测体系已分层落地（[08-evaluation-strategy.md](08-evaluation-strategy.md)）——Tier 0 结构门卫零成本接入（`lint_skill_graph` 增 frontmatter / 档位映射闭环），Tier 1 触发评估立样板。但「并行 vs 串行缺陷率」「workflow skill 效果」仍需 Tier 2 / Tier 3 实测，前置评测集尚在起步。
 
 **5. skill 图靠手写 prompt 引用维系，会漂移。** 23+ 个 skill，跨 skill 接线是 prompt 引用，改名/删除/新增易留断点。
 > ✅ **已补**：`scripts/lint_skill_graph.py`（dangling / orphan / name 一致 / command 目标）+ `--graph` 输出供 LLM 判语义遗漏。但它只查「目标存不存在、连不连通」，查不出「语义没接对」——后者仍靠 review。
@@ -42,7 +43,8 @@
 | 高风险 task 的 review 从 owner 剥离，恢复对抗性 | ⏳ 待做 |
 | 执行段加 token 预算旋钮 + spend 留痕 | ⏳ 待做 |
 | tasks.md 依赖校验（按改动文件重叠自动提示缺失 `depends_on`） | ✅ 已做（`lint_task_deps.py`） |
-| 用 `skill-evolver` 实测并行 vs 串行缺陷率 | ⏳ 待做 |
+| 评测体系分层落地（结构门卫 / 触发 / 效果 / 自进化） | 🟡 基建已立（`08-evaluation-strategy.md`，Tier 0/1 已接） |
+| 用 `skill-evolver` 实测并行 vs 串行缺陷率 | ⏳ 待做（前置评测集起步中） |
 
 ## 总评
 

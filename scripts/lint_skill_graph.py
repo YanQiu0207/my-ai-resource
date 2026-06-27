@@ -6,7 +6,13 @@
   （命名空间前缀匹配）但实际不存在的目标——改名、拼错、未创建。
 - command 目标：每个 command 指向的 skill 必须存在。
 - name 一致：每个 SKILL.md 的 frontmatter name 必须等于其目录名。
+- frontmatter 完整：每个 SKILL.md 必须有 description 字段且非空（触发评估的依据）。
+- review 档位映射闭环：workflow-code-review 档位表 / 清单里引用的每个 reviewer /
+  critic 都必须在 agents/ 下存在——改档位、拼错 reviewer 名会被挡住。
 - orphan：定义了却无人引用的 skill（warning，不阻断）。
+
+这一层是评测体系的 L1 结构门卫（零 token、确定性）：能机器判定的结构问题在此拦下，
+语义 / 触发 / 效果评测见 agentic-framework/docs/08-evaluation-strategy.md。
 
 能力边界：只查「引用目标是否存在 / 是否连通」，查不出「引用存在但语义没接对」
 （如链路图声明了某 skill 但工作流步骤实际没加载它）——那是 code review 的职责。
@@ -27,6 +33,9 @@ VERB_REF = re.compile(r"(?:加载|调用|运行|执行|使用|派)\s*[`/]?(" + K
 ARROW_REF = re.compile(r"(?:→|->)\s*`?(" + KEBAB + r")`?")
 CMD_TARGET = re.compile(r"调用\s*`?([a-z][a-z0-9-]+)`?\s*skill")
 FRONTMATTER_NAME = re.compile(r"^name:\s*(.+?)\s*$", re.MULTILINE)
+FRONTMATTER_DESC = re.compile(r"^description:(.*)$", re.MULTILINE)
+# 反引号包裹的 reviewer / critic 名（档位映射闭环检查用）
+REVIEWER_TOKEN = re.compile(r"`([a-z][a-z0-9-]*(?:-reviewer|-critic))`")
 
 
 def read(path: Path) -> str:
@@ -45,12 +54,18 @@ def collect_nodes(root: Path) -> tuple[dict[str, Path], set[str], set[str], list
             name_errors.append(f"{sub}: 目录下缺少 SKILL.md")
             continue
         skills[sub.name] = skill_md
-        match = FRONTMATTER_NAME.search(read(skill_md))
+        lines = read(skill_md).splitlines()
+        fm_end = frontmatter_end(lines)
+        fm_text = "\n".join(lines[:fm_end])  # 只在 frontmatter 区判定，避免正文 name:/description: 干扰
+        match = FRONTMATTER_NAME.search(fm_text)
         declared = match.group(1).strip() if match else None
         if declared != sub.name:
             name_errors.append(
                 f"{skill_md}: frontmatter name `{declared}` 与目录名 `{sub.name}` 不一致"
             )
+        desc_error = check_description(skill_md, fm_text)
+        if desc_error:
+            name_errors.append(desc_error)
 
     commands = {p.stem for p in (root / "commands").glob("*.md")}
     agents = {p.stem for p in (root / "agents").glob("*.md")}
@@ -104,6 +119,35 @@ def find_command_target_errors(root: Path, skills: set[str]) -> list[str]:
         target = match.group(1)
         if target not in skills:
             errors.append(f"{cmd}: 调用的 skill `{target}` 不存在")
+    return errors
+
+
+def check_description(skill_md: Path, fm_text: str) -> str | None:
+    """SKILL.md frontmatter 必须有非空 description（触发评估的依据，写歪会导致召回错）。"""
+    match = FRONTMATTER_DESC.search(fm_text)
+    if not match:
+        return f"{skill_md}: frontmatter 缺少 description 字段"
+    if not match.group(1).strip():  # 块标量 `|` / `>` 会留下非空标记，视为有内容
+        return f"{skill_md}: frontmatter description 为空"
+    return None
+
+
+def find_review_profile_errors(root: Path, agents: set[str]) -> list[str]:
+    """workflow-code-review 档位表 / 清单里引用的 reviewer / critic 必须存在于 agents/。"""
+    review_md = root / "skills" / "workflow-code-review" / "SKILL.md"
+    if not review_md.is_file():
+        return []
+    errors: list[str] = []
+    reported: set[str] = set()
+    for lineno, line in enumerate(read(review_md).splitlines(), start=1):
+        for match in REVIEWER_TOKEN.finditer(line):
+            token = match.group(1)
+            if token in agents or token in reported:
+                continue
+            errors.append(
+                f"{review_md}:{lineno}: 档位 / 清单引用的 reviewer `{token}` 在 agents/ 不存在"
+            )
+            reported.add(token)
     return errors
 
 
@@ -222,6 +266,7 @@ def main(argv: list[str]) -> int:
     errors: list[str] = []
     errors.extend(name_errors)
     errors.extend(find_command_target_errors(root, set(skills)))
+    errors.extend(find_review_profile_errors(root, agents))
     errors.extend(find_dangling(files, known, namespaces))
     warnings = find_orphans(skills, files)
 
