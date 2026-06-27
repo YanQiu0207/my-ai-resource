@@ -32,16 +32,21 @@ export const meta = {
 
 const RESULT_SCHEMA = {
   type: 'object',
-  required: ['taskId', 'status', 'summary'],
+  required: ['taskId', 'status', 'summary', 'verify_command', 'verify_report_path', 'spec_drift'],
   properties: {
-    taskId:  { type: 'string' },
-    status:  { type: 'string', enum: ['完成', '需人工', '阻塞'] },
-    summary: { type: 'string' },
-    issues:  { type: 'array', items: { type: 'string' } },
+    taskId:             { type: 'string' },
+    status:             { type: 'string', enum: ['完成', '需人工', '阻塞'] },
+    summary:            { type: 'string' },
+    verify_command:     { type: 'string' },
+    verify_report_path: { type: 'string' },
+    spec_drift:         { type: 'string' },
+    issues:             { type: 'array', items: { type: 'string' } },
   },
 }
 
-// args.waves: [[{ id, title, context, acceptance, review_profile }, ...], ...]
+// args.base_sha: Phase 0 记录的 git rev-parse HEAD
+// args.baseline_path: 有 verify.config.json 时为 <repo-root>/.verify/baseline.json；无 config 时为空
+// args.waves: [[{ id, title, context_files, verification, artifacts, review_profile }, ...], ...]
 // 波次顺序执行（满足 depends_on 语义），波内任务并行
 const allResults = []
 for (const wave of args.waves) {
@@ -49,12 +54,12 @@ for (const wave of args.waves) {
   const waveResults = await parallel(wave.map(task => () =>
     agent(
       `你是 ${task.id} 的 owner agent。\n` +
-      `任务：${task.title}\nReview 档位：${task.review_profile}\nContext：${task.context}\n验收标准：${task.acceptance}\n\n` +
+      `任务：${task.title}\nReview 档位：${task.review_profile}\nContext：${task.context_files}\n验证：${task.verification}\n产物：${task.artifacts}\n\n` +
       `完成后依次执行：\n` +
       `1. 确认所有子任务已完成；测试子任务须已调用 workflow-test-generation 生成并运行通过\n` +
       `2. 按 task.review_profile 加载 workflow-code-review 并修复\n` +
-      `3. 加载 workflow-verification 跑机器验证（有 config 按配置、否则探测 build / test），FAIL 则修复重跑\n` +
-      `4. 只返回结论，不输出完整 diff`,
+      `3. 加载 workflow-verification 跑机器验证；有 config 必须传 --baseline ${args.baseline_path} --diff-base ${args.base_sha}，无 config 必须传 --diff-base ${args.base_sha}；FAIL 则修复重跑\n` +
+      `4. 返回 verify_command、verify_report_path、spec_drift 结论；不输出完整 diff`,
       { label: task.id, phase: '执行', schema: RESULT_SCHEMA, isolation: 'worktree' }
     )
   ))
@@ -72,8 +77,10 @@ Workflow 完成后，主会话拿到 `results` 数组，逐条更新 `tasks.md` 
 ## Phase 0：准备
 
 1. **加载编码规范**（步骤 4 已做）。
-2. **采机器验证基线**：若项目根有 `verify.config.json`，在动代码前 `python <skill-dir>/scripts/verify.py --save-baseline <repo-root>/.verify/baseline.json`（主仓库根绝对路径，worktree 看不到未提交基线）。无 config 跳过。
-3. **构建依赖波（wave）并传入 Workflow**：完整读取 `tasks.md`，按 `depends_on` 做拓扑分层，产出 `waves` 数组：
+2. **记录 diff 基准**：动代码前记录 `base_sha=$(git rev-parse HEAD)`；后续所有 worktree 与最终验证都显式传 `--diff-base <base_sha>`，避免提交 / 合并后工作区 clean 导致 spec drift 误判无改动。
+3. **采机器验证基线**：若项目根有 `verify.config.json`，在动代码前 `python <skill-dir>/scripts/verify.py --save-baseline <repo-root>/.verify/baseline.json`，并把该绝对路径作为 `baseline_path` 传入 Workflow；无 config 时 `baseline_path` 为空。
+4. **校验依赖**：跑 `python scripts/lint_task_deps.py <tasks.md 路径>` 检查 dangling 依赖、循环依赖、以及「改同一文件却无依赖关系」的并行冲突。有 ERROR 必须先修；有 WARN（潜在并行冲突）逐条确认是补 `depends_on` 还是确属可并行。
+5. **构建依赖波（wave）并传入 Workflow**：完整读取 `tasks.md`，按 `depends_on` 做拓扑分层，产出 `waves` 数组：
    ```
    wave 1: [无前置依赖的 task]
    wave 2: [依赖仅来自 wave 1 的 task]
@@ -89,7 +96,7 @@ Workflow 完成后，主会话拿到 `results` 数组，逐条更新 `tasks.md` 
 
 1. **dispatch**：波内每个 task 派一个子 agent（A 为 owner、B 为 implementer），各自在隔离 git worktree（基于当前分支 HEAD）工作，受并发上限约束、超出排队。多个子 agent **在同一条消息里并行派发**。
    - worktree：用 Agent 工具的 `isolation: "worktree"`，或 `git worktree add -b <task-branch> <path> HEAD`。
-   - prompt 公共部分：task 描述 + context（直接改文件 + 上游 + 下游）+ `spec` / `tasks` 摘要 + 编码规范要点 + worktree 路径 + 「只在此 worktree 内改、改完提交」。
+   - prompt 公共部分：task 描述 + `context_files`（直接改文件 + 上游 + 下游）+ `verification` + `artifacts` + `spec` / `tasks` 摘要 + 编码规范要点 + worktree 路径 + 「只在此 worktree 内改、改完提交」。
    - 职责见上方编排模型表（A 自闭环 / B 只实现 + 测试）。**测试与实现同批**：接口层与核心逻辑必须有覆盖关键路径、能跑通的测试，不允许先实现后补。
 2. **质量门**（review + 机器验证，两者都过才算通过）：
    - 模式 A：owner 已跑完 review 与 `workflow-verification`，主 agent 只**收集**结论。

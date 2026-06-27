@@ -13,7 +13,7 @@ description: 代码评审。按风险档位协调 reviewer subagent 进行并行
 
 | 档位 | 适用 | 调用 reviewer |
 | --- | --- | --- |
-| `lightweight` | 小需求 / 低风险：单模块局部改动、不改公开接口、不碰数据 / 权限 / 并发 / 安全 / 性能关键路径 | `standards-reviewer`、`spec-compliance-reviewer` |
+| `lightweight` | 小需求 / 低风险：单模块局部改动、不改公开接口、不碰数据 / 权限 / 并发 / 安全 / 性能关键路径 | `comprehensive-reviewer`（一趟覆盖工程规范 + 需求符合度两维） |
 | `standard` | 默认档：普通功能、Bug 修复、跨 2-3 个模块但风险可控 | `standards-reviewer`、`spec-compliance-reviewer`、`robustness-reviewer` |
 | `strict` | 高风险：生产关键路径、安全 / 权限 / 数据迁移 / 并发 / 分布式 / 性能敏感 / 公共 API / 大范围重构 | 全量 5 reviewer；有 finding 时调用 `review-critic` |
 
@@ -23,11 +23,12 @@ description: 代码评审。按风险档位协调 reviewer subagent 进行并行
 
 | 角色 | subagent_name | 调用方式 |
 |------|---------------|----------|
+| 轻量综合审查 | `comprehensive-reviewer` | 仅 `lightweight` 调用（一趟覆盖工程规范 + 需求符合度两维） |
 | 性能审查 | `performance-reviewer` | `strict` 调用；性能敏感任务在 `standard` 中也可加入 |
 | 健壮性审查 | `robustness-reviewer` | `standard` / `strict` 调用 |
-| 工程规范审查 | `standards-reviewer` | 所有档位调用 |
+| 工程规范审查 | `standards-reviewer` | `standard` / `strict` 调用 |
 | 契约与信任链审查 | `magical-prompt-reviewer` | `strict` 调用；涉及 prompt / 外部工具 / 权限边界时必须加入 |
-| 需求/设计符合度审查 | `spec-compliance-reviewer` | 所有档位调用 |
+| 需求/设计符合度审查 | `spec-compliance-reviewer` | `standard` / `strict` 调用 |
 | 对抗性验证 | `review-critic` | `strict` 有 finding 时调用；`standard` 出现 P0 / P1 finding 时调用 |
 
 ## 工作流
@@ -89,6 +90,16 @@ description: 代码评审。按风险档位协调 reviewer subagent 进行并行
 ---
 
 ## 📋 Reviewer 意见汇总
+
+> 只列本档位实际调用的 reviewer 分节。`lightweight` 档仅 `comprehensive-reviewer` 一节。
+
+### 轻量综合审查 (comprehensive-reviewer，仅 lightweight 档)
+
+- **F-1** [P1 · 需求符合度]
+  - **位置**: `file:line`
+  - **问题**: [一句话问题摘要]
+  - **证据**: [支撑该问题的关键代码片段/数据/逻辑推理]
+- 💡 **Handoff notes**: [发现的超出轻量档的高风险线索 + 是否建议升档，无则省略此行]
 
 ### 性能审查 (performance-reviewer)
 

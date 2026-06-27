@@ -35,6 +35,16 @@ workflow-frontend-design（设计方向 / ui-spec）
 4. 测试 / 校验能力沉淀到 tasks.md 的测试任务、`bp-frontend-taste` 和 `frontend-playwright-verification`。
 5. 交付前必须完成最终浏览器校验，失败则回到实现修复。
 
+## 本地化版本标记
+
+| 本地 skill | 来源 repo | 同步日期 | 吸收范围 | 本地改动点 |
+| --- | --- | --- | --- | --- |
+| `workflow-frontend-design` | Anthropic `skills/frontend-design`、`skills/web-artifacts-builder`；OpenAI `plugins/build-web-apps/frontend-app-builder` | 2026-06-27 | 设计负责人视角、概念先行、完整页面、设计到实现闭环 | 拆成轻 / 重两档；接入 `spec.md`、`ui-spec.md` 和本地前端闭环 |
+| `bp-frontend-layout` | Anthropic `skills/frontend-design`；OpenAI `plugins/build-web-apps/frontend-app-builder` | 2026-06-27 | 页面骨架、section 节奏、响应式结构 | 从设计入口拆成独立布局阶段 |
+| `std-react` | OpenAI `plugins/build-web-apps/react-best-practices`、`shadcn-best-practices` | 2026-06-27 | React、TypeScript、shadcn/ui 实现规范 | 改为中文精简规则，默认服从既有项目技术栈 |
+| `bp-frontend-taste` | Anthropic `skills/frontend-design`；OpenAI `plugins/build-web-apps/frontend-app-builder` | 2026-06-27 | 视觉质量、保真检查、避免模板化 | 作为实现后的独立质检门 |
+| `frontend-playwright-verification` | Anthropic `skills/webapp-testing`；OpenAI `plugins/build-web-apps/frontend-testing-debugging` | 2026-06-27 | 浏览器验证、交互检查、截图对照、失败回修 | 作为最终浏览器验证门，失败回到实现修复 |
+
 ## 来源
 
 - Anthropic skills：<https://github.com/anthropics/skills>

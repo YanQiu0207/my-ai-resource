@@ -13,7 +13,7 @@
 进入本模式前必须全部满足，否则退回标准流程：
 
 1. `spec.md`（或 Quick Draft）已存在且已批准。
-2. `tasks.md` 已拆解完成，每个 task 带 `depends_on` 依赖、`review_profile` 档位、context（直接修改文件 + 上游 + 下游）、可机械执行的验收标准。
+2. `tasks.md` 已拆解完成，每个 task 带 `depends_on`、`review_profile`、`context_files`、`verification`、`artifacts`。
 3. 用户已批准 `tasks.md`。
 4. 编码规范已确定（按技术栈）。
 
@@ -29,18 +29,19 @@
 
 1. 完整读 `spec.md` + `tasks.md`。
 2. 加载编码规范（`bp-coding-best-practices` + `bp-performance-optimization` + 按文件类型 `std-*`）。
-3. 由 `depends_on` 构建任务 **DAG**，**分波（wave）**：同波内任务互不依赖、可并行；后波依赖前波产物。无依赖信息时保守串行或回问用户。
+3. 记录 `base_sha=$(git rev-parse HEAD)`，后续 `workflow-verification` 显式传 `--diff-base <base_sha>`。
+4. 由 `depends_on` 构建任务 **DAG**，**分波（wave）**：同波内任务互不依赖、可并行；后波依赖前波产物。无依赖信息时保守串行或回问用户。
 
 ### Phase 1：逐波并行执行
 
 对每个 wave：
 
 1. **并行 dispatch**：wave 内每个 task 派一个子 agent（模式 A 为 owner、模式 B 为 implementer），各自在**隔离 git worktree**（基于当前分支 HEAD）工作，受并发上限约束（超出排队）。
-   - subagent 输入：task 描述 + context + spec/tasks 摘要 + 编码规范 + worktree 路径。
+   - subagent 输入：task 描述 + `context_files` + `verification` + `artifacts` + spec/tasks 摘要 + 编码规范 + worktree 路径。
    - subagent 动作：模式 A（owner）自闭环——实现 → 写 + 跑测试（`workflow-test-generation`，与实现同批）→ 自审（`workflow-code-review`）→ 有限轮次自修复；模式 B（implementer）实现 + 写 / 跑测试。（可选 TDD：先写失败测试）
 2. **每产物过质量门**（在各自 worktree 内；模式 A 由 owner 子 agent 自跑、模式 B 由主 agent 跑）：
    - `workflow-code-review`（按风险分级：小需求轻量审，普通任务标准审，高风险任务严格审）。
-   - `workflow-verification`（零配置机器门：探测项目 build / test 跑一遍，绿才算过）——与 review 并列，机器能验的不靠 LLM 背书。
+   - `workflow-verification`（有配置跑 build / test / lint；无配置也跑内置 spec drift）——与 review 并列，机器能验的不靠 LLM 背书。
    - 未过 → 有限轮次自修复 → 仍不过 → 标记该 task **「需人工」**，**不阻塞同波其他 task**。
 3. **合并**：wave 内通过的 task，其 worktree 依次合并回主分支；冲突 → 标记该 task「需人工」。
 4. **不停等用户**，进入下一波。

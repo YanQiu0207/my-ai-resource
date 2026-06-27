@@ -36,6 +36,7 @@
 | --- | --- |
 | `install_agentic_framework.py` | 把 `skills/` / `agents/` / `commands/` 安装进目标目录的 `.claude` 与 `.codex` |
 | `lint_skill_graph.py` | 静态校验 skill 引用图：dangling（引用不存在的目标）、command 目标缺失、name/目录名一致、orphan（无人引用的 skill） |
+| `lint_task_deps.py` | 校验 tasks.md 依赖：dangling 依赖、循环依赖、以及「改同一文件却无依赖关系」的并行冲突（提示补 `depends_on`） |
 
 `lint_skill_graph.py` 两种用法：
 

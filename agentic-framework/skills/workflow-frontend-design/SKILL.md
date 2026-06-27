@@ -1,6 +1,6 @@
 ---
 name: workflow-frontend-design
-description: 通用前端 UI 工作流入口。检测到新页面、复杂新组件、绿地 Web App、Dashboard、Landing Page、前端重设计或明显视觉改版时使用；极轻 UI 调整或单文件小组件改动直接走 workflow-code-generation。基于 Anthropic frontend-design 与 OpenAI frontend-app-builder 的中文化本地版本：先做有观点的设计方向和完整概念，再沉淀 ui-spec.md，最后交给 workflow-code-generation 实现与浏览器验证。
+description: 通用前端 UI 工作流入口。检测到新页面、复杂新组件、绿地 Web App、Dashboard、Landing Page、前端重设计或明显视觉改版时使用；复杂组件和小页面走轻量档，页面级 / Web App / 重设计走重型档；极轻 UI 调整或单文件小组件改动直接走 workflow-code-generation。基于 Anthropic frontend-design 与 OpenAI frontend-app-builder 的中文化本地版本：先做有观点的设计方向和完整概念，再沉淀 ui-spec.md，最后交给 workflow-code-generation 实现与浏览器验证。
 ---
 
 > 输出一行：`Using workflow-frontend-design`
@@ -44,6 +44,12 @@ description: 通用前端 UI 工作流入口。检测到新页面、复杂新组
 
 本 skill 不探测 Claude Code / Codex 外部技能。官方能力已本地化到本目录。
 
+## 分档规则
+
+- **轻量档**：复杂组件、小页面、局部页面重排。只出 1 个 HTML 方案；用户确认后生成精简 `ui-spec.md`，作为实现契约。
+- **重型档**：页面级功能、Web App、Dashboard、Landing Page、重设计。出 2-3 个 HTML 方案；用户确认后生成完整 `ui-spec.md`。
+- 不确定时按重型档处理；用户明确要求快速推进时可降为轻量档。
+
 闭环由本地 workflow 承担；官方技能能力拆到各阶段：
 
 ```text
@@ -74,13 +80,14 @@ workflow-frontend-design（定方向 / 出概念 / 产出 ui-spec）
 
 只问会阻塞设计的问题；不要问「喜欢什么风格」。
 
-### Step 2：出 2-3 个 HTML 方案
+### Step 2：按档位出 HTML 方案
 
-生成 2-3 个单文件 HTML：
+先判断档位，再生成单文件 HTML：
 
 - 路径：`docs/design-docs/<module>/<feature>/ui-mockup-A.html`。
 - Tailwind CDN，可直接打开。
-- 方向必须明显不同，但业务事实一致。
+- 轻量档只生成 1 个方案。
+- 重型档生成 2-3 个方案，方向必须明显不同，但业务事实一致。
 - 必须包含正常态、空态、加载态、错误态。
 - 必须体现桌面和移动端布局。
 
@@ -97,7 +104,7 @@ workflow-frontend-design（定方向 / 出概念 / 产出 ui-spec）
 输出：
 
 ```text
-已生成 N 个 UI 方案，请在浏览器中打开对比：
+已按 [轻量档 / 重型档] 生成 N 个 UI 方案，请在浏览器中打开对比：
 
 - 方案 A（路径）：[一句话说明方向]
 - 方案 B（路径）：[一句话说明方向]
@@ -110,7 +117,7 @@ workflow-frontend-design（定方向 / 出概念 / 产出 ui-spec）
 
 ### Step 4：确定布局骨架并产出 ui-spec
 
-用户选定方案后，先**加载 `bp-frontend-layout`**，确定页面类型、区域划分、主操作位置、容器模型、section 节奏和响应式塌缩，把结果写进下方模板的「布局骨架」section。
+用户选定方案后，先**加载 `bp-frontend-layout`**，确定页面类型、区域划分、主操作位置、容器模型、section 节奏和响应式塌缩，把结果写进下方模板的「布局骨架」section。轻量档可以压缩描述，但不得省略实现必需信息。
 
 随后写入 `docs/design-docs/<module>/<feature>/ui-spec.md`，**每个 section 必须填实，不得只留空标题**：
 

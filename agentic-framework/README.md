@@ -105,6 +105,7 @@ commands=(
 )
 agents=(
     codebase-researcher.md
+    comprehensive-reviewer.md
     magical-prompt-reviewer.md
     performance-reviewer.md
     review-critic.md
@@ -175,8 +176,13 @@ fw="/e/work/my-ai-resource/agentic-framework"
 
 printf '\n---\n# Subagent Definitions\n' >> AGENTS.md
 cat "$fw/agents/codebase-researcher.md"      >> AGENTS.md
+cat "$fw/agents/comprehensive-reviewer.md"   >> AGENTS.md
 cat "$fw/agents/standards-reviewer.md"       >> AGENTS.md
 cat "$fw/agents/spec-compliance-reviewer.md" >> AGENTS.md
+cat "$fw/agents/robustness-reviewer.md"      >> AGENTS.md
+cat "$fw/agents/performance-reviewer.md"     >> AGENTS.md
+cat "$fw/agents/magical-prompt-reviewer.md"  >> AGENTS.md
+cat "$fw/agents/review-critic.md"            >> AGENTS.md
 ```
 
 ### 卸载

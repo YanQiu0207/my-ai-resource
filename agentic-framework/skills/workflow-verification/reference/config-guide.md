@@ -11,7 +11,7 @@ cp <skill-dir>/reference/verify.config.example.json verify.config.json
 # 3. 把 .verify/ 加进 .gitignore（基线和报告是本地临时产物）
 ```
 
-无 `verify.config.json` 时门禁走零配置兜底（自动探测 build/test），不报错。
+无 `verify.config.json` 时，仍会运行内置 spec drift 检查；项目自定义 build/test/lint 检查跳过。
 
 ## 配置结构
 
@@ -112,7 +112,56 @@ python <skill-dir>/scripts/verify.py --baseline .verify/baseline.json
 - `count`：`not_decrease` 要求 current ≥ 基线，`not_increase` 要求 current ≤ 基线。
 - 下放并行执行在 git worktree 内，基线须用**主仓库根绝对路径**（worktree 看不到未提交的 `.verify/`）。
 
-退出码：`0` 全过 / 无配置；`1` 有新增违规（进修复循环）；`2` 门禁自身出错——工具缺失、正则非法、基线损坏（先排查配置，别改代码）。
+退出码：`0` 全过；`1` 有新增违规或 spec drift（进修复循环）；`2` 门禁自身出错——工具缺失、正则非法、基线损坏（先排查配置，别改代码）。
+
+## 内置 spec drift 检查
+
+不用写进 `verify.config.json`，`verify.py` 默认执行。
+
+规则：
+
+- 本次 git diff 有代码文件变更。
+- 但无法机械证明相关 `spec.md`、`ui-spec.md`、`tasks.md` 或 ADR 已变更。
+- 且未传 `--spec-drift-reason`。
+
+相关性只做轻量判定：`tasks.md` 中出现代码路径，或代码文件位于同一规格目录下。判不出相关时，宁可要求写明原因。
+
+标准 / 下放流程要在动代码前记录 `base_sha`，验证时传入：
+
+```bash
+# 有 verify.config.json
+python <skill-dir>/scripts/verify.py \
+  --baseline <repo-root>/.verify/baseline.json \
+  --diff-base <base_sha>
+
+# 无 verify.config.json
+python <skill-dir>/scripts/verify.py --diff-base <base_sha>
+```
+
+命中时返回 `1`，交付前必须二选一：
+
+```bash
+# 方案 1：补文档 / 任务 / ADR 后重跑（有 config）
+python <skill-dir>/scripts/verify.py \
+  --baseline <repo-root>/.verify/baseline.json \
+  --diff-base <base_sha>
+
+# 方案 1：补文档 / 任务 / ADR 后重跑（无 config）
+python <skill-dir>/scripts/verify.py --diff-base <base_sha>
+
+# 方案 2：确实无需更新时写明原因（有 config）
+python <skill-dir>/scripts/verify.py \
+  --baseline <repo-root>/.verify/baseline.json \
+  --diff-base <base_sha> \
+  --spec-drift-reason "仅修复脚本输出编码，不改变需求、任务拆解或架构决策"
+
+# 方案 2：确实无需更新时写明原因（无 config）
+python <skill-dir>/scripts/verify.py \
+  --diff-base <base_sha> \
+  --spec-drift-reason "仅修复脚本输出编码，不改变需求、任务拆解或架构决策"
+```
+
+报告会写入 `.verify/report.json` 的 `spec_drift` 字段，最终交付证据必须引用其结论。
 
 ## 常见技术栈片段
 

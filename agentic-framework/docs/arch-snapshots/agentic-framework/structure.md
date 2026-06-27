@@ -81,8 +81,8 @@ workflow-requirements-clarification / system-design / troubleshooting
 
 | 档位 | reviewer 组合 | 适用场景 |
 |---|---|---|
-| lightweight | standards + spec-compliance | 配置/文档/极低风险改动 |
-| standard | + performance + robustness | 常规功能开发 |
+| lightweight | comprehensive（一趟覆盖工程规范 + 需求符合度） | 配置/文档/极低风险改动 |
+| standard | + robustness（性能敏感时另加 performance） | 常规功能开发 |
 | strict | 全部 5 个 + critic | 核心逻辑/并发/安全/架构改动 |
 
 ## 知识沉淀文档结构
