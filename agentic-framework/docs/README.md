@@ -27,6 +27,27 @@
 | [05-industry-comparison.md](05-industry-comparison.md) | 与 Superpowers / OpenSpec / Spec Kit / Taskmaster / ce-compound 的横向对比 | 评估框架定位 / 选型决策时 |
 | [06-official-frontend-skills-installation.md](06-official-frontend-skills-installation.md) | 官方前端 skills 本地化来源与保留流程 | 理解本地前端 workflow 来源时 |
 
+## 工具脚本
+
+仓库 `scripts/` 下的维护脚本（开发期工具，不随框架安装）：
+
+| 脚本 | 用途 |
+| --- | --- |
+| `install_agentic_framework.py` | 把 `skills/` / `agents/` / `commands/` 安装进目标目录的 `.claude` 与 `.codex` |
+| `lint_skill_graph.py` | 静态校验 skill 引用图：dangling（引用不存在的目标）、command 目标缺失、name/目录名一致、orphan（无人引用的 skill） |
+
+`lint_skill_graph.py` 两种用法：
+
+```bash
+# lint：有 ERROR 退出码 1，可进 CI / pre-commit
+python scripts/lint_skill_graph.py
+
+# graph：输出 Markdown 引用图（出边带行号 + 原文、入边），交给 LLM 判定语义遗漏 / 多余
+python scripts/lint_skill_graph.py --graph
+```
+
+**分工**：脚本只查「引用目标存不存在、连不连通」（客观事实），查不出「引用存在但语义没接对」（如链路图声明了某 skill 但工作流步骤没真加载它）。后者把 `--graph` 输出连同各 skill 职责交给 LLM 判定——出边带行号 + 原文，正好区分「工作流里真加载」与「仅链路图 / description 提及」。
+
 ## 一句话结论
 
 **Superpowers 的执行形态（自主 + 并行 + subagent-driven）× `workflow-*` 的质量基建（分级 review + 复杂度路由）** —— 拿成熟范本补 `workflow-*` 唯一的执行短板，而不丢它比 Superpowers 强的那几样。

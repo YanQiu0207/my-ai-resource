@@ -95,13 +95,13 @@ tasks.md 经用户批准后，执行下放给 agent：**主会话只编排，不
 
 **先为每个 task 判定 review 档位**：
 
-| 档位 | 适用 | reviewer 集 |
-| --- | --- | --- |
-| `lightweight` | 小需求 / 低风险：单模块局部改动、不改公开接口、不碰数据 / 权限 / 并发 / 安全 / 性能关键路径 | `standards-reviewer` + `spec-compliance-reviewer` |
-| `standard` | 默认档：普通功能、Bug 修复、跨 2-3 个模块但风险可控 | `standards-reviewer` + `spec-compliance-reviewer` + `robustness-reviewer` |
-| `strict` | 高风险：生产关键路径、安全 / 权限 / 数据迁移 / 并发 / 分布式 / 性能敏感 / 公共 API / 大范围重构 | 全量 5 reviewer + 有 finding 时 `review-critic` |
+| 档位 | 适用 |
+| --- | --- |
+| `lightweight` | 小需求 / 低风险：单模块局部改动、不改公开接口、不碰数据 / 权限 / 并发 / 安全 / 性能关键路径 |
+| `standard` | 默认档：普通功能、Bug 修复、跨 2-3 个模块但风险可控 |
+| `strict` | 高风险：生产关键路径、安全 / 权限 / 数据迁移 / 并发 / 分布式 / 性能敏感 / 公共 API / 大范围重构 |
 
-无法判断风险时选 `standard`；命中高风险任一条件时选 `strict`。review 档位写入 task context，owner / implementer 必须按档位调用 `workflow-code-review`。
+无法判断风险时选 `standard`；命中高风险任一条件时选 `strict`。各档位对应的 reviewer 集由 `workflow-code-review` 定义（本 skill 只判档，不重列）。review 档位写入 task context，owner / implementer 必须按档位调用 `workflow-code-review`。
 
 **主会话先构建波次（wave）数组**：完整读取 `tasks.md`，按 `depends_on` 做拓扑分层——无前置依赖（或依赖已合并）的 task 归入同一波；依赖未完成的 task 归入后续波。将波次数组作为 `args.waves` 传入 Workflow 工具。缺 `depends_on` 无法判断时保守串行（每波 1 个 task）或回问，**禁止全并行**。
 

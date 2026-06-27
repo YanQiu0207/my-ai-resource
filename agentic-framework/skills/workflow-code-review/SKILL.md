@@ -44,7 +44,7 @@ description: 代码评审。按风险档位协调 reviewer subagent 进行并行
 
 - 在 `docs/design-docs/` 下搜索相关 `spec.md` 和 `tasks.md`
 - 确定审查文件、上下文文件（caller/callee/接口定义）
-- 根据文件类型和目录确定适用 skill；若目录结构或 spec.md 显示 DDD 分层（adapter / domain / application / infrastructure），将 `bp-cola-ddd` 加入 `{skill_list}` 传入 `standards-reviewer` 和 `spec-compliance-reviewer`
+- 根据文件类型和目录确定适用 skill；若目录结构或 spec.md 显示 DDD 分层（adapter / domain / application / infrastructure），将 `bp-cola-ddd` 加入 `{skill_list}` 传入 `standards-reviewer` 和 `spec-compliance-reviewer`；若改动涉及架构边界 / 模块划分或组件接口 / 数据模型设计，相应将 `bp-architecture-design` / `bp-component-design` 加入 `{skill_list}`
 - 提炼与本次 review 相关的 spec/task 摘要
 
 ### 3. 并行分派 reviewer
