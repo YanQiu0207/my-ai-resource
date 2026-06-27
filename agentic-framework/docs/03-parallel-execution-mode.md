@@ -40,6 +40,7 @@
    - subagent 动作：模式 A（owner）自闭环——实现 → 写 + 跑测试（`workflow-test-generation`，与实现同批）→ 自审（`workflow-code-review`）→ 有限轮次自修复；模式 B（implementer）实现 + 写 / 跑测试。（可选 TDD：先写失败测试）
 2. **每产物过质量门**（在各自 worktree 内；模式 A 由 owner 子 agent 自跑、模式 B 由主 agent 跑）：
    - `workflow-code-review`（按风险分级：小需求轻量审，普通任务标准审，高风险任务严格审）。
+   - `workflow-verification`（零配置机器门：探测项目 build / test 跑一遍，绿才算过）——与 review 并列，机器能验的不靠 LLM 背书。
    - 未过 → 有限轮次自修复 → 仍不过 → 标记该 task **「需人工」**，**不阻塞同波其他 task**。
 3. **合并**：wave 内通过的 task，其 worktree 依次合并回主分支；冲突 → 标记该 task「需人工」。
 4. **不停等用户**，进入下一波。

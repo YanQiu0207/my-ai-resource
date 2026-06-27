@@ -30,7 +30,7 @@
 | 任务拆解 | ✅ tasks.md（用户批准） | ✅ writing-plans（2-5 分钟小任务） | ❌ 无 | ✅ 第三步 | ✅ 自动拆解（核心功能）|
 | 并行执行 | ✅ DAG 分波 + worktree 隔离 | ✅ dispatching-parallel-agents | ❌ 无 | ❌ 无 | ❌ 无 |
 | 代码评审 | ✅ 分级多维（3档 / 5+1 agent） | ⚠️ 单 reviewer subagent | ❌ 无 | ✅ 有质量门（偏静态检查）| ❌ 无 |
-| 客观门禁 | ❌ 无 | ❌ 无 | ❌ 无 | ✅ CI 集成（生产向） | ❌ 无 |
+| 客观门禁 | ✅ workflow-verification（零配置机器门，探测 build/test） | ❌ 无 | ❌ 无 | ✅ CI 集成（生产向） | ❌ 无 |
 | 知识沉淀 | ✅ ADR + arch-snapshot + spec 归档 | ❌ 无 | ⚠️ 规格本身即沉淀 | ⚠️ spec 文档 | ❌ 无 |
 
 ### 执行自主性
@@ -47,7 +47,7 @@
 
 | 框架 | review 机制 | 验证机制 | 对抗性验证 |
 |---|---|---|---|
-| 本框架 | 3档位 × 5维度 reviewer + critic judge | ❌ 无 | ✅ review-critic 专项驳斥 |
+| 本框架 | 3档位 × 5维度 reviewer + critic judge | ✅ workflow-verification（零配置 build/test 机器门） | ✅ review-critic 专项驳斥 |
 | Superpowers | 单 reviewer subagent | ❌ 无 | ❌ 无 |
 | OpenSpec | ❌ 无 | ❌ 无 | ❌ 无 |
 | Spec Kit | 有质量门（以静态检查为主） | ✅ CI 集成 | ❌ 无 |

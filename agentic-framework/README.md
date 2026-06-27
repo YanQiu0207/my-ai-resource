@@ -145,6 +145,7 @@ Codex 通过项目根目录的 `AGENTS.md` 获取指令，不自动扫描 `.code
 - 代码生成：`workflow-code-generation/SKILL.md`
 - 快速设计：`workflow-quick-design/SKILL.md`
 - 代码评审：`workflow-code-review/SKILL.md`
+- 机器验证门：`workflow-verification/SKILL.md`
 - 需求澄清：`workflow-requirements-clarification/SKILL.md`
 - 系统设计：`workflow-system-design/SKILL.md`
 - 测试生成：`workflow-test-generation/SKILL.md`
@@ -193,6 +194,7 @@ Codex 无独立文件，删除 `AGENTS.md` 中对应的段落即可。
 | `/quick-design` | 快速设计（内部工具 / 小型服务） |
 | `/code-generation` | 代码生成（统一入口，复杂度路由） |
 | `/code-review` | 分级代码评审 |
+| `/verification` | 零配置机器验证门（探测 build / test 跑一遍） |
 | `/test-generation` | 测试生成（含 Playwright E2E） |
 | `/frontend-design` | 前端 UI 设计（生成 HTML 方案 → 用户选择 → ui-spec.md） |
 | `/performance-optimization` | 性能优化 |

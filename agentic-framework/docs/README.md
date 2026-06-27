@@ -26,6 +26,7 @@
 | [04-compound-engineering-comparison.md](04-compound-engineering-comparison.md) | compound-engineering-plugin 调研 + 与本框架对比 + 吸收决策 | 了解知识沉淀机制设计依据时 |
 | [05-industry-comparison.md](05-industry-comparison.md) | 与 Superpowers / OpenSpec / Spec Kit / Taskmaster / ce-compound 的横向对比 | 评估框架定位 / 选型决策时 |
 | [06-official-frontend-skills-installation.md](06-official-frontend-skills-installation.md) | 官方前端 skills 本地化来源与保留流程 | 理解本地前端 workflow 来源时 |
+| [07-critical-review.md](07-critical-review.md) | 框架独立批判性评估（短板 + 改进，标注已补项） | 审视框架短板 / 规划后续改进时 |
 
 ## 工具脚本
 
