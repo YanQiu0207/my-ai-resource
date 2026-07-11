@@ -234,6 +234,7 @@ python skills/workflow-code-generation/scripts/check_delivery.py --tasks <tasks.
 | [06-official-frontend-skills-installation.md](docs/06-official-frontend-skills-installation.md) | 官方前端 skills 本地化来源与保留流程 | 理解本地前端 workflow 来源时 |
 | [07-critical-review.md](docs/07-critical-review.md) | 框架独立批判性评估（短板 + 改进，标注已补项） | 审视框架短板 / 规划后续改进时 |
 | [08-evaluation-strategy.md](docs/08-evaluation-strategy.md) | 评测体系分层落地 + 框架特有难点 | 规划 / 落地 skill 评测时 |
+| [10-harness-engineering-practices.md](docs/10-harness-engineering-practices.md) | 两篇 Harness Engineering 实践分析 + 框架吸收建议 | 规划框架下一轮演进时 |
 
 架构决策记录：
 
