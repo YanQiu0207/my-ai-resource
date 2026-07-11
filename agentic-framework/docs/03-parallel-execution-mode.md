@@ -23,7 +23,7 @@
 
 ## 4. 核心流程
 
-> **编排模型（先判定 CLI）**：`code-review` 按 task 风险选择轻量 / 标准 / 严格 reviewer 集，「子 agent 能否再派子 agent」（嵌套 dispatch）决定 review/verify 跑在哪层。Claude Code 自 v2.1.172（2026-06-10）起**支持**子 agent 嵌套（深度上限 5 层，已实测确认）。据此二选一：**模式 A（支持嵌套，默认）**——每 task 派 owner 子 agent，自闭环实现 + 自审 + 自验，主 agent 只编排；**模式 B（不支持嵌套的 CLI）**——implementer 只实现，主 agent 上提 review/verify。两模式只差「质量门跑在哪层」，其余流程一致。实现见 `workflow-code-generation` skill 步骤 5。
+> **编排模型（先判定 CLI）**：`code-review` 按 task 风险选择轻量 / 标准 / 严格 reviewer 集，「子 agent 能否再派子 agent」（嵌套 dispatch）决定 review/verify 跑在哪层。Claude Code 自 v2.1.172（2026-06-10）起**支持**子 agent 嵌套（深度上限 5 层，已实测确认）。据此二选一：**模式 A（支持嵌套，默认）**——每 task 派 owner 子 agent；`lightweight` / `standard` 由 owner 自闭环，`strict` 的 review 和裁决上提给主 agent 或独立 Judge Agent；**模式 B（不支持嵌套的 CLI）**——implementer 只实现，主 agent 上提 review/verify。实现见 `workflow-code-generation` skill 步骤 5。
 
 ### Phase 0：准备
 
@@ -38,8 +38,8 @@
 
 1. **并行 dispatch**：wave 内每个 task 派一个子 agent（模式 A 为 owner、模式 B 为 implementer），各自在**隔离 git worktree**（基于当前分支 HEAD）工作，受并发上限约束（超出排队）。
    - subagent 输入：task 描述 + `context_files` + `verification` + `artifacts` + spec/tasks 摘要 + 编码规范 + worktree 路径。
-   - subagent 动作：模式 A（owner）自闭环——实现 → 写 + 跑测试（`workflow-test-generation`，与实现同批）→ 自审（`workflow-code-review`）→ 有限轮次自修复；模式 B（implementer）实现 + 写 / 跑测试。（可选 TDD：先写失败测试）
-2. **每产物过质量门**（在各自 worktree 内；模式 A 由 owner 子 agent 自跑、模式 B 由主 agent 跑）：
+   - subagent 动作：模式 A（owner）完成实现 → 写 + 跑测试（`workflow-test-generation`，与实现同批）→ 机器验证；`lightweight` / `standard` 自跑 review，`strict` 等待独立 Judge 裁决后修复 keep finding。模式 B（implementer）实现 + 写 / 跑测试。（可选 TDD：先写失败测试）
+2. **每产物过质量门**（在各自 worktree 内；模式 A 按 review 档位分流，模式 B 由主 agent 跑）：
    - `workflow-code-review`（按风险分级：小需求轻量审，普通任务标准审，高风险任务严格审）。
    - `workflow-verification`（有配置跑 build / test / lint；无配置也跑内置 spec drift）——与 review 并列，机器能验的不靠 LLM 背书。
    - 未过 → 有限轮次自修复 → 仍不过 → 标记该 task **「需人工」**，**不阻塞同波其他 task**。
@@ -56,12 +56,13 @@
 
 | 设计点 | 说明 |
 | --- | --- |
-| **CLI 嵌套能力决定编排** | 支持子 agent 嵌套（如 Claude Code）→ 模式 A：owner 自闭环；不支持 → 模式 B：主 agent 上提质量门 |
+| **CLI 嵌套能力决定编排** | 支持子 agent 嵌套（如 Claude Code）→ 模式 A：owner 执行，`strict` 独立裁决；不支持 → 模式 B：主 agent 上提质量门 |
 | **依赖分波保正确性** | 有依赖的 task 不并行；无 `depends_on` 则保守串行或询问 |
 | **worktree 隔离保并行安全** | 并行写文件不冲突；review/verify 通过后才合并回主分支 |
 | **失败隔离** | 单 task 失败/不过/冲突 → 标记「需人工」，不阻塞其他、不停整个流程 |
 | **tasks.md 进度真相源** | 状态实时写回（进行中 / 完成 / 需人工 + 原因 + 失败输出）；中断后读 tasks.md + `git worktree list` 残留续跑 |
 | **质量不打折** | 必过匹配风险的 review；小需求不强制全量 reviewer，高风险才全量 |
+| **严格档独立裁决** | `strict` 的 implementer、reviewer、Judge 分离；owner 只修复 keep finding，不参与最终裁决 |
 | **自主但可观测** | 全程不停等，但每个 subagent 的 review/verify 结果留痕，末尾汇总透明 |
 | **并发上限** | 受机器/工具并发能力约束，超出排队 |
 | **安全边界** | worktree 基于主分支，合并前主分支不受影响 |
