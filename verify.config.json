@@ -1,12 +1,12 @@
 {
-  "_comment": "agentic-framework 仓库自用机器验证门，同时作为 verify.config.json 的活样例。检查 scripts/ 下的 Python 工具可编译、skill 引用图连通。用法见 agentic-framework/skills/workflow-verification（reference/config-guide.md 讲怎么配置/接脚本）。",
+  "_comment": "agentic-framework 仓库自用机器验证门，同时作为 verify.config.json 的活样例。检查 agentic-framework/scripts/ 下的 Python 工具可编译、skill 引用图连通。用法见 agentic-framework/skills/workflow-verification（reference/config-guide.md 讲怎么配置/接脚本）。",
 
   "checks": [
     {
       "name": "B-scripts-compile",
-      "_note": "B 类·交付门槛：scripts/ 下的 Python 工具全部可编译。",
+      "_note": "B 类·交付门槛：agentic-framework/scripts/ 下的 Python 工具全部可编译。",
       "type": "exit_code",
-      "command": "python -m compileall -q scripts",
+      "command": "python -m compileall -q agentic-framework/scripts",
       "expect_code": 0,
       "baseline_aware": false
     },
@@ -14,7 +14,7 @@
       "name": "B-skill-graph",
       "_note": "B 类·交付门槛：skill 引用图连通——无 dangling / orphan / name 不一致 / command 目标缺失。",
       "type": "exit_code",
-      "command": "python scripts/lint_skill_graph.py",
+      "command": "python agentic-framework/scripts/lint_skill_graph.py",
       "expect_code": 0,
       "baseline_aware": false,
       "timeout_seconds": 120

@@ -28,7 +28,7 @@
 
 ## Tier 0：L1 结构门卫（零 token，已落地）
 
-`scripts/lint_skill_graph.py` 是评测体系的 L1 门卫，确定性、可进 CI / pre-commit。当前覆盖：
+`agentic-framework/scripts/lint_skill_graph.py` 是评测体系的 L1 门卫，确定性、可进 CI / pre-commit。当前覆盖：
 
 | 检查 | 拦什么 |
 | --- | --- |

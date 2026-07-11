@@ -240,8 +240,8 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "--root",
         type=Path,
-        default=Path(__file__).resolve().parents[1] / "agentic-framework",
-        help="agentic-framework 根目录。默认取仓库内同级目录。",
+        default=Path(__file__).resolve().parents[1],
+        help="agentic-framework 根目录。默认取脚本所在框架目录。",
     )
     parser.add_argument(
         "--graph",
