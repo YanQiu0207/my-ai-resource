@@ -78,7 +78,7 @@ Workflow 完成后，主会话拿到 `results` 数组，逐条更新 `tasks.md` 
 
 1. **加载编码规范**（步骤 4 已做）。
 2. **记录 diff 基准**：动代码前记录 `base_sha=$(git rev-parse HEAD)`；后续所有 worktree 与最终验证都显式传 `--diff-base <base_sha>`，避免提交 / 合并后工作区 clean 导致 spec drift 误判无改动。
-3. **采机器验证基线**：若项目根有 `verify.config.json`，在动代码前 `python <skill-dir>/scripts/verify.py --save-baseline <repo-root>/.verify/baseline.json`，并把该绝对路径作为 `baseline_path` 传入 Workflow；无 config 时 `baseline_path` 为空。
+3. **采机器验证基线**：若项目根有 `verify.config.json`，在动代码前 `python <skill-dir>/scripts/verify.py --save-baseline <repo-root>/.verify/baseline.json`，并把该绝对路径作为 `baseline_path` 传入 Workflow；无 config 时 `baseline_path` 为空（走到这里意味着用户已在 tasks.md 批准闸口明确跳过 `/verify-config` 初始化）。基线采集后本次任务冻结 `verify.config.json`，不得修改。
 4. **校验依赖**：跑 `python scripts/lint_task_deps.py <tasks.md 路径>` 检查 dangling 依赖、循环依赖、以及「改同一文件却无依赖关系」的并行冲突。有 ERROR 必须先修；有 WARN（潜在并行冲突）逐条确认是补 `depends_on` 还是确属可并行。
 5. **构建依赖波（wave）并传入 Workflow**：完整读取 `tasks.md`，按 `depends_on` 做拓扑分层，产出 `waves` 数组：
    ```
