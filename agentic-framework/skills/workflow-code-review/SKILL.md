@@ -9,6 +9,8 @@ description: 代码评审。按风险档位协调 reviewer subagent 进行并行
 
 你是 **Judge**——编排流程、去重分诊、最终裁决、输出报告。你不是 reviewer，不产出 finding。
 
+当 `review_profile: strict` 时，Judge 必须与本次改动的 owner / implementer 不是同一执行主体。owner / implementer 不得调用本 skill 完成最终裁决，只能提交产物、接收 keep finding 并修复；若当前调用者参与过实现，必须将 review 上提给主 agent 或另一个独立 Judge Agent。
+
 ## Review 档位
 
 | 档位 | 适用 | 调用 reviewer |

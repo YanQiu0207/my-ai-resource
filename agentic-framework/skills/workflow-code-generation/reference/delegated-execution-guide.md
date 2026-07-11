@@ -8,14 +8,14 @@
 
 - **实测**：派一个子 agent，让它再派一个孙 agent 回一句话；成功即支持。
 - Claude Code **支持**嵌套（版本号与来源见框架根 `docs/03-parallel-execution-mode.md`，可能随 CLI 更新而变）；**最终以实测为准**。
-- ⚠️ **嵌套深度上限 5 层**（固定、不可配置；第 5 层子 agent 不再获得 `Agent` 工具）。模式 A 链深 3 层（主 agent → owner → reviewer），勿设计更深的派生链。
+- ⚠️ **嵌套深度上限 5 层**（固定、不可配置；第 5 层子 agent 不再获得 `Agent` 工具）。模式 A 的 `lightweight` / `standard` 链深 3 层（主 agent → owner → reviewer）；`strict` 的 reviewer 由独立 Judge 派发，owner 不在 review 调用链中。
 
 | 模式 | 适用 | owner / implementer 职责 | 质量门跑在哪 |
 | --- | --- | --- | --- |
-| **A（默认）** | 支持嵌套（Claude Code） | owner 自闭环：实现 → 调用 `workflow-test-generation` → 测试通过 → 自跑 review → 有限轮次自修复 → 返回结论 | owner 子 agent 内 |
+| **A（默认）** | 支持嵌套（Claude Code） | owner 完成实现、测试和机器验证；`lightweight` / `standard` 自跑 review，`strict` 只接收独立 Judge 的 keep finding 并修复 | `lightweight` / `standard` 在 owner 内；`strict` 在主 agent 或独立 Judge Agent 内 |
 | **B（兜底）** | 不支持嵌套（其他 CLI） | implementer 只实现 + 写 / 跑测试 | 主 agent 对每个产物跑 |
 
-两模式只差「质量门跑在哪层」，其余流程一致。
+两模式只差「质量门跑在哪层」，其余流程一致。无论采用哪种模式，`strict` 的 implementer、reviewer、Judge 都不得是同一执行主体。
 
 ## Claude Code 专属：Workflow 工具编排（推荐，规避主会话上下文膨胀）
 
@@ -32,11 +32,12 @@ export const meta = {
 
 const RESULT_SCHEMA = {
   type: 'object',
-  required: ['taskId', 'status', 'summary', 'verify_command', 'verify_report_path', 'spec_drift'],
+  required: ['taskId', 'status', 'summary', 'independent_review_required', 'verify_command', 'verify_report_path', 'spec_drift'],
   properties: {
     taskId:             { type: 'string' },
-    status:             { type: 'string', enum: ['完成', '需人工', '阻塞'] },
+    status:             { type: 'string', enum: ['完成', '待评审', '需人工', '阻塞'] },
     summary:            { type: 'string' },
+    independent_review_required: { type: 'boolean' },
     verify_command:     { type: 'string' },
     verify_report_path: { type: 'string' },
     spec_drift:         { type: 'string' },
@@ -57,9 +58,9 @@ for (const wave of args.waves) {
       `任务：${task.title}\nReview 档位：${task.review_profile}\nContext：${task.context_files}\n验证：${task.verification}\n产物：${task.artifacts}\n\n` +
       `完成后依次执行：\n` +
       `1. 确认所有子任务已完成；测试子任务须已调用 workflow-test-generation 生成并运行通过\n` +
-      `2. 按 task.review_profile 加载 workflow-code-review；结论 NEEDS_CHANGES（keep 的 P0/P1）→ 修复后按复审模式重跑，最多 2 轮，仍不过标「需人工」；P2 / follow-up 不触发修复循环，记入返回结论\n` +
-      `3. 加载 workflow-verification 跑机器验证；有 config 必须传 --baseline ${args.baseline_path} --diff-base ${args.base_sha}，无 config 必须传 --diff-base ${args.base_sha}；FAIL 则修复重跑；修复若产生代码 diff，须按复审模式（范围为该 diff）重过 review 再验\n` +
-      `4. 返回 verify_command、verify_report_path、spec_drift 结论；不输出完整 diff`,
+      `2. review_profile 为 lightweight / standard：加载 workflow-code-review；结论 NEEDS_CHANGES（keep 的 P0/P1）→ 修复后按复审模式重跑，最多 2 轮，仍不过标「需人工」；review_profile 为 strict：不得调用 workflow-code-review 或裁决，返回 status=待评审、independent_review_required=true\n` +
+      `3. 加载 workflow-verification 跑机器验证；有 config 必须传 --baseline ${args.baseline_path} --diff-base ${args.base_sha}，无 config 必须传 --diff-base ${args.base_sha}；FAIL 则修复重跑；lightweight / standard 修复产生代码 diff 时，须按复审模式（范围为该 diff）重过 review 再验\n` +
+      `4. 返回 independent_review_required、verify_command、verify_report_path、spec_drift 结论；不输出完整 diff`,
       { label: task.id, phase: '执行', schema: RESULT_SCHEMA, isolation: 'worktree' }
     )
   ))
@@ -70,9 +71,9 @@ phase('汇总')
 return { results: allResults }
 ```
 
-Workflow 完成后，主会话拿到 `results` 数组，逐条更新 `tasks.md` 状态字段，继续后续波次或进入 SKILL 步骤 6。
+Workflow 完成后，主会话拿到 `results` 数组。`independent_review_required=true` 时，先由主 agent 或独立 Judge Agent 完成 `strict` review，把 keep finding 交给 owner 修复并按复审模式重审；通过后才能将 task 更新为「完成」。其余结果直接按返回状态更新 `tasks.md`，然后继续后续波次或进入 SKILL 步骤 6。
 
-> **与 Phase 1 的关系**：本方案替代 Phase 1 中「主会话用 `Agent` 工具 dispatch」的部分；失败隔离、合并、`tasks.md` 状态写回的逻辑由 owner agent 在脚本内执行，规则与 Phase 1 一致。
+> **与 Phase 1 的关系**：本方案替代 Phase 1 中「主会话用 `Agent` 工具 dispatch」的部分；失败隔离与合并规则保持一致。`strict` 的 review、裁决和最终状态写回由主会话负责，owner 不参与。
 
 ## Phase 0：准备
 
@@ -97,11 +98,11 @@ Workflow 完成后，主会话拿到 `results` 数组，逐条更新 `tasks.md` 
 1. **dispatch**：波内每个 task 派一个子 agent（A 为 owner、B 为 implementer），各自在隔离 git worktree（基于当前分支 HEAD）工作，受并发上限约束、超出排队。多个子 agent **在同一条消息里并行派发**。
    - worktree：用 Agent 工具的 `isolation: "worktree"`，或 `git worktree add -b <task-branch> <path> HEAD`。
    - prompt 公共部分：task 描述 + `context_files`（直接改文件 + 上游 + 下游）+ `verification` + `artifacts` + `spec` / `tasks` 摘要 + 编码规范要点 + worktree 路径 + 「只在此 worktree 内改、改完提交」。
-   - 职责见上方编排模型表（A 自闭环 / B 只实现 + 测试）。**测试与实现同批**：接口层与核心逻辑必须有覆盖关键路径、能跑通的测试，不允许先实现后补。
+   - 职责见上方编排模型表（A 按 review 档位分流 / B 只实现 + 测试）。**测试与实现同批**：接口层与核心逻辑必须有覆盖关键路径、能跑通的测试，不允许先实现后补。
 2. **质量门**（review + 机器验证，两者都过才算通过）：
-   - 模式 A：owner 已跑完 review 与 `workflow-verification`，主 agent 只**收集**结论。
+   - 模式 A：`lightweight` / `standard` 由 owner 跑 review 与 `workflow-verification`，主 agent 只收集结论；`strict` 由 owner 跑 `workflow-verification`，主 agent 或独立 Judge Agent 跑 review 并裁决。
    - 模式 B：主 agent 对每个产物（在其 worktree 内）扮演 `workflow-code-review` 的 Judge 按 `review_profile` 裁决，再跑 `workflow-verification` 机器验证。
-3. **失败隔离**：测试 / review（结论 `NEEDS_CHANGES`）/ 机器验证 任一不过 → 有限轮次（≤ 2）自修复重跑（review 重跑用复审模式；A 在 owner 内、B 由主 agent 派 fixer 在同一 worktree 修）；仍不过、或子 agent 报范围 / 依赖问题无法在本 task 内解决 → 标 `需人工` 附原因 + 失败输出（review finding / 错误摘要）；**子 agent 崩溃 / 超时 / 无产物返回** → 标 `需人工` 注「agent 未返回，需重 dispatch」。标 `需人工` 的 task **其 worktree 保留**供排查、不清理。以上**均不阻塞同波其他 task、不停整个流程**。
+3. **失败隔离**：测试 / review（结论 `NEEDS_CHANGES`）/ 机器验证任一不过 → 有限轮次（≤ 2）自修复重跑。review 重跑用复审模式；模式 A 的 `lightweight` / `standard` 在 owner 内修复，`strict` 由独立 Judge 把 keep finding 交给 owner 修复后复审；模式 B 由主 agent 派 fixer 在同一 worktree 修。仍不过、或子 agent 报范围 / 依赖问题无法在本 task 内解决 → 标 `需人工` 附原因 + 失败输出（review finding / 错误摘要）；**子 agent 崩溃 / 超时 / 无产物返回** → 标 `需人工` 注「agent 未返回，需重 dispatch」。标 `需人工` 的 task **其 worktree 保留**供排查、不清理。以上**均不阻塞同波其他 task、不停整个流程**。
 4. **合并**：波内过质量门的 task，其 worktree / 分支**依次**合并回主分支（`git merge --no-ff <task-branch>`），成功即标 `完成`、清理 worktree（`git worktree remove`）；冲突 → 标 `需人工`（记冲突文件）、**worktree 保留待人工**，跳过、继续合并其余。
    - **上游未合并 → 下游阻塞**：某 task 标 `需人工` 后，**依赖它的后波 task 一并标 `阻塞`**（记「上游 Task N 未合并」）、跳过 dispatch——否则后波会 dispatch 在缺该产物的 HEAD 上，破坏「先建后迁后删可编译」。上游经人工解决并合并后方可解阻。
 5. **不停等用户**，进入下一波，直到所有波处理完。

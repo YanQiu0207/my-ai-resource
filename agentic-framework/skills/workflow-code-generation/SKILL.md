@@ -109,7 +109,7 @@ tasks.md 经用户批准后，执行下放给 agent：**主会话只编排，不
 **主会话先构建波次（wave）数组**：完整读取 `tasks.md`，按 `depends_on` 做拓扑分层——无前置依赖（或依赖已合并）的 task 归入同一波；依赖未完成的 task 归入后续波。将波次数组作为 `args.waves` 传入 Workflow 工具。缺 `depends_on` 无法判断时保守串行（每波 1 个 task）或回问，**禁止全并行**。
 
 **先判定 CLI 嵌套能力**（派子 agent 试再派孙 agent；判定细则与 5 层上限见 reference 手册），选编排模式：
-- **模式 A（默认，Claude Code 支持嵌套）**：每 task 派 owner 子 agent 自闭环——实现 → 调用 `workflow-test-generation` → 测试通过 → 自跑 review → 有限轮次自修复，主 agent 只收集结论。
+- **模式 A（默认，Claude Code 支持嵌套）**：每 task 派 owner 子 agent 执行实现、测试和机器验证。`lightweight` / `standard` 由 owner 自跑 review；`strict` 由主 agent 或独立 Judge Agent 调用 `workflow-code-review` 并裁决，owner 只接收 keep finding 并修复。
 - **模式 B（兜底，不支持嵌套）**：implementer 只实现 + 写 / 跑测试，review 由主 agent 对每个产物跑。
 
 **详细操作（Phase 0 准备 / Phase 1 逐波执行 / 失败隔离 / 合并 / 阻塞）见 [reference/delegated-execution-guide.md](reference/delegated-execution-guide.md)，按其执行。** 核心不变量：每产物必过 review **且过 `workflow-verification` 机器验证（build / test 等检查全绿）** 才合并；失败标 `需人工` 不阻塞其余；上游未合并则下游 `阻塞`；`tasks.md` 的 `状态:` 字段是续跑真相源。Claude Code 使用 `Workflow` 工具替代 `Agent` 工具以规避主会话上下文膨胀，详见上方 reference 手册。
