@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
+import stat
 import sys
+import tempfile
 from pathlib import Path
 from typing import Iterable, Sequence
 
@@ -15,6 +18,45 @@ import setup_code_review
 
 CONTENT_DIRS = ("skills", "agents", "commands")
 CLIENT_DIRS = (".codex", ".claude")
+
+
+def _path_exists(path: Path) -> bool:
+    """Return whether a path exists without following a broken link."""
+    return os.path.lexists(path)
+
+
+def _is_directory_link(path: Path) -> bool:
+    """Return whether path is a directory symlink or Windows junction."""
+    if path.is_symlink():
+        return path.is_dir()
+    is_junction = getattr(path, "is_junction", None)
+    if is_junction and is_junction():
+        return True
+    try:
+        attributes = path.lstat().st_file_attributes
+    except (AttributeError, OSError):
+        return False
+    return path.is_dir() and bool(attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT)
+
+
+def _remove_path(path: Path) -> None:
+    """Remove a path without traversing directory links."""
+    if path.is_symlink():
+        path.unlink()
+    elif _is_directory_link(path):
+        path.rmdir()
+    elif path.is_dir():
+        shutil.rmtree(path)
+    else:
+        path.unlink()
+
+
+def _restore_directory_contents(source: Path, target: Path) -> None:
+    """Restore a directory snapshot while retaining the target directory node."""
+    target.mkdir(parents=True, exist_ok=True)
+    for child in target.iterdir():
+        _remove_path(child)
+    shutil.copytree(source, target, dirs_exist_ok=True, symlinks=True)
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
@@ -129,14 +171,63 @@ def install(
             f"Missing required source directories:\n{missing}"
         )
 
-    for client_dir in CLIENT_DIRS:
-        for content_dir in CONTENT_DIRS:
-            copy_tree(
-                source_dir / content_dir,
-                target_root / client_dir / content_dir,
-                dry_run,
-                force,
-            )
+    operations = [
+        (source_dir / content_dir, target_root / client_dir / content_dir)
+        for client_dir in CLIENT_DIRS
+        for content_dir in CONTENT_DIRS
+    ]
+    conflicts = [
+        path
+        for source, target in operations
+        for path in conflicting_paths(source, target)
+    ]
+    if conflicts and not force:
+        conflict_list = "\n".join(str(path) for path in conflicts[:20])
+        raise FileExistsError(
+            "Refusing to overwrite changed target files. "
+            f"Use --force to overwrite:\n{conflict_list}"
+        )
+
+    if dry_run:
+        for source, target in operations:
+            copy_tree(source, target, True, force)
+        return
+
+    with tempfile.TemporaryDirectory() as backup_root_text:
+        backup_root = Path(backup_root_text)
+        backups: dict[Path, tuple[Path, str | None, Path | None]] = {}
+        for index, (_, target) in enumerate(operations):
+            if _path_exists(target):
+                backup = backup_root / str(index)
+                link_target = os.readlink(target) if _is_directory_link(target) else None
+                resolved_target = target.resolve() if link_target is not None else None
+                shutil.copytree(target, backup, symlinks=True)
+                backups[target] = (backup, link_target, resolved_target)
+        try:
+            for source, target in operations:
+                copy_tree(source, target, False, force)
+        except OSError as copy_error:
+            rollback_errors: list[str] = []
+            for index, (_, target) in enumerate(operations):
+                try:
+                    backup_info = backups.get(target)
+                    if backup_info and backup_info[1] is not None:
+                        backup, _, resolved_target = backup_info
+                        _restore_directory_contents(backup, resolved_target)
+                        continue
+                    if _path_exists(target):
+                        _remove_path(target)
+                    if backup_info:
+                        backup, _, _ = backup_info
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copytree(backup, target, symlinks=True)
+                except OSError as rollback_error:
+                    rollback_errors.append(f"{target}: {rollback_error}")
+            if rollback_errors and hasattr(copy_error, "add_note"):
+                copy_error.add_note(
+                    "Rollback errors:\n" + "\n".join(rollback_errors)
+                )
+            raise
 
 
 def main(argv: Sequence[str]) -> int:

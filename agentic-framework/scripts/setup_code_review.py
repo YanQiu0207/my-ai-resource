@@ -153,7 +153,7 @@ def install_ocr(dry_run: bool) -> bool:
 
     if dry_run:
         print(f"[dry-run] npm install -g {NPM_PACKAGE}")
-        return True
+        return False
 
     print(f"installing ocr: npm install -g {NPM_PACKAGE}")
     result = subprocess.run([npm, "install", "-g", NPM_PACKAGE], check=False)

@@ -117,6 +117,7 @@ codex mcp add playwright-parallel -- npx -y playwright-mcp-parallel@latest --hea
 
 ```bash
 commands=(
+    project-init.md
     requirements-clarification.md
     system-design.md
     quick-design.md
@@ -168,6 +169,7 @@ for f in "${agents[@]}";   do rm -f ".claude/agents/$f";   done
 
 | 命令 | 用途 |
 |------|------|
+| `/project-init` | 项目初始化（版本管理模式选择、git init、CLAUDE.md / AGENTS.md / README / docs 骨架） |
 | `/requirements-clarification` | 需求澄清，产出 spec 1-3 章 |
 | `/system-design` | 系统设计，产出完整 spec |
 | `/quick-design` | 快速设计（内部工具 / 小型服务） |

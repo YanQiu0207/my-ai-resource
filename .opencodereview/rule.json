@@ -1,0 +1,14 @@
+{
+    "rules": [
+        {
+            "path": "**",
+            "rule": "检查空指针、并发/线程安全、SQL 注入、XSS 等常见缺陷。",
+            "merge_system_rule": true
+        }
+    ],
+    "exclude": [
+        "**/generated/**",
+        "**/vendor/**",
+        "**/node_modules/**"
+    ]
+}

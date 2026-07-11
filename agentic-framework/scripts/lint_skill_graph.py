@@ -56,6 +56,9 @@ def collect_nodes(root: Path) -> tuple[dict[str, Path], set[str], set[str], list
         skills[sub.name] = skill_md
         lines = read(skill_md).splitlines()
         fm_end = frontmatter_end(lines)
+        if fm_end == -1:
+            name_errors.append(f"{skill_md}: frontmatter 未闭合")
+            continue
         fm_text = "\n".join(lines[:fm_end])  # 只在 frontmatter 区判定，避免正文 name:/description: 干扰
         match = FRONTMATTER_NAME.search(fm_text)
         declared = match.group(1).strip() if match else None
@@ -113,12 +116,10 @@ def find_command_target_errors(root: Path, skills: set[str]) -> list[str]:
     """Each command must target an existing skill."""
     errors: list[str] = []
     for cmd in sorted((root / "commands").glob("*.md")):
-        match = CMD_TARGET.search(read(cmd))
-        if not match:
-            continue
-        target = match.group(1)
-        if target not in skills:
-            errors.append(f"{cmd}: 调用的 skill `{target}` 不存在")
+        for match in CMD_TARGET.finditer(read(cmd)):
+            target = match.group(1)
+            if target not in skills:
+                errors.append(f"{cmd}: 调用的 skill `{target}` 不存在")
     return errors
 
 
@@ -166,13 +167,13 @@ def find_orphans(skills: dict[str, Path], files: list[Path]) -> list[str]:
 
 
 def frontmatter_end(lines: list[str]) -> int:
-    """1-based line number of the closing frontmatter `---`, or 0 if none."""
+    """Return closing line, 0 without frontmatter, or -1 when unclosed."""
     if not lines or lines[0].strip() != "---":
         return 0
     for idx in range(1, len(lines)):
         if lines[idx].strip() == "---":
             return idx + 1
-    return 0
+    return -1
 
 
 def outgoing_edges(text: str, targets: set[str], self_name: str) -> list[tuple[str, int, str]]:
@@ -188,6 +189,8 @@ def outgoing_edges(text: str, targets: set[str], self_name: str) -> list[tuple[s
     }
     lines = text.splitlines()
     fm_end = frontmatter_end(lines)
+    if fm_end == -1:
+        return []
     edges: list[tuple[str, int, str]] = []
     for lineno, line in enumerate(lines, start=1):
         if lineno <= fm_end or "http" in line:

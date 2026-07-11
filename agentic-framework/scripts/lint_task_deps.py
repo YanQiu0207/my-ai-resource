@@ -28,15 +28,24 @@ def field(body: str, name: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+def has_field(body: str, name: str) -> bool:
+    """Return whether a task field is declared, even when its value is empty."""
+    return re.search(
+        r"^\s*-\s*" + name + r"\s*[:：]", body, re.MULTILINE
+    ) is not None
+
+
 def parse_deps(body: str) -> tuple[set[int], bool]:
     """解析 depends_on，兼容旧字段 `依赖`，并返回字段是否存在。"""
+    has_depends_on = has_field(body, "depends_on")
+    has_legacy_dep = has_field(body, "依赖")
     dep_text = field(body, "depends_on")
-    if not dep_text:
+    if not has_depends_on:
         dep_text = field(body, "依赖")
-    has_field = bool(dep_text)
+    field_exists = has_depends_on or has_legacy_dep
     if not dep_text or dep_text in {"[]", "无"}:
-        return set(), has_field
-    return {int(n) for n in re.findall(r"\d+", dep_text)}, has_field
+        return set(), field_exists
+    return {int(n) for n in re.findall(r"\d+", dep_text)}, field_exists
 
 
 def parse_tasks(text: str) -> dict[int, dict]:
@@ -45,6 +54,8 @@ def parse_tasks(text: str) -> dict[int, dict]:
     tasks: dict[int, dict] = {}
     for idx, match in enumerate(headers):
         tid = int(match.group(1))
+        if tid in tasks:
+            raise ValueError(f"重复任务 ID: {tid}")
         start = match.end()
         end = headers[idx + 1].start() if idx + 1 < len(headers) else len(text)
         body = text[start:end]
@@ -88,7 +99,11 @@ def main(argv: list[str]) -> int:
         print(f"error: 找不到 {args.tasks_md}", file=sys.stderr)
         return 2
 
-    tasks = parse_tasks(args.tasks_md.read_text(encoding="utf-8", errors="replace"))
+    try:
+        tasks = parse_tasks(args.tasks_md.read_text(encoding="utf-8", errors="replace"))
+    except ValueError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 2
     if not tasks:
         print("error: 未解析到任何任务（检查 tasks.md 是否符合 `### 任务 N:` 格式）", file=sys.stderr)
         return 2
