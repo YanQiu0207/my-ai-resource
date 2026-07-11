@@ -238,7 +238,7 @@ Task 3 (描述)  ← 被 Task 6, 7 依赖
 
 | # | 检查项 | 判定标准 |
 |---|--------|---------|
-| 1 | **依赖 DAG 无环 + 无并行冲突** | 跑 `python scripts/lint_task_deps.py <tasks.md>` 机器校验：无 dangling 依赖、无环、无「改同一文件却无依赖关系」的并行冲突 |
+| 1 | **依赖 DAG 无环 + 无并行冲突 + 必填字段齐全** | 跑 `python <本 skill 目录>/scripts/lint_task_deps.py <tasks.md>` 机器校验：无 dangling 依赖、无环、无「改同一文件却无依赖关系」的并行冲突，且每个任务的必填字段（review_profile / context_files / verification / artifacts / 状态）齐全合法 |
 | 2 | **每个任务编译可通过** | 逐个检查每个任务引用的类型/函数是否已在前序任务或现有代码中定义/声明（含占位桩） |
 | 3 | **每个任务有 verification** | `verification` 可操作（可 grep / 可编译 / 可运行），无"确保正确"类描述；**测试通过必须作为验收标准之一** |
 | 4 | **spec 全覆盖** | 映射表无空白行 |

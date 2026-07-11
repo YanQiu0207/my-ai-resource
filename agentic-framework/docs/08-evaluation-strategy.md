@@ -13,7 +13,7 @@
 
 | 档 | 对应方法论 | 在本框架长什么样 | 成本 | 现状 |
 | --- | --- | --- | --- | --- |
-| **Tier 0 结构门卫** | 结构门禁 + L1 快速门卫 | `lint_skill_graph.py` / `lint_task_deps.py`：引用闭环、frontmatter 完整、档位→reviewer 映射、依赖正确性 | **零 token** | ✅ 已落地 |
+| **Tier 0 结构门卫** | 结构门禁 + L1 快速门卫 | `lint_skill_graph.py` / `lint_task_deps.py` / `lint_spec.py` / `check_delivery.py`：引用闭环、frontmatter 完整、档位→reviewer 映射、依赖与必填字段正确性、spec 章节完整性、交付门（任务终态 / 归档 / 工作区干净） | **零 token** | ✅ 已落地 |
 | **Tier 1 触发评估** | 触发评估（should / should-not / boundary） | 核心路由 skill 配 `evaluation/trigger-cases.md`，验 `description` 召回 / 误触发 | 低（单轮、可不用 judge） | ✅ 4 个核心路由 skill 已覆盖 |
 | **Tier 2 效果评估** | 效果评估 + 考题结构 + Rubric | 仅对改了 reviewer prompt / 路由逻辑的高风险改动，挑 1-2 道考题做 A/B | **高** | ⏳ 按需 |
 | **Tier 3 自进化** | skill-evolver 8 阶段 Loop | 自动迭代优化 | 黑洞 | ⛔ 暂不做（前置：先有稳定评测集） |
@@ -42,8 +42,13 @@
 ```bash
 python scripts/lint_skill_graph.py          # ERROR 即退出码 1
 python scripts/lint_skill_graph.py --graph  # 输出引用图，交 LLM 判语义遗漏
-python scripts/lint_task_deps.py <tasks.md> # tasks.md 依赖正确性
+# 以下三道门随 workflow-code-generation skill 分发（skills/workflow-code-generation/scripts/）
+python skills/workflow-code-generation/scripts/lint_task_deps.py <tasks.md> # tasks.md 依赖与必填字段
+python skills/workflow-code-generation/scripts/lint_spec.py <spec.md> --phase design|code  # spec 章节完整性门
+python skills/workflow-code-generation/scripts/check_delivery.py --tasks <tasks.md> --spec <spec.md>  # 交付门
 ```
+
+流程门禁的挂点：`lint_spec.py` 挂在 `workflow-system-design` 前置条件（design）与 `workflow-code-generation` 步骤 2（code）；`lint_task_deps.py` 挂在任务规划检查表与执行段 Phase 0；`check_delivery.py` 挂在交付收尾（标准流程与 Fast-Path），非 0 禁止宣布交付。三道门随 skill 安装进目标项目，模板按兄弟 skill 目录解析。这三道门把「AI 自述完成」替换为机器判定；「AI 必须跑门禁」本身仍靠工作流指令遵循，客户端 hook 层强制（如 Claude Code Stop hook）另行立项评估。
 
 **能力边界**：脚本只查「结构对不对、引用通不通」（客观），查不出「引用存在但语义没接对」——后者靠 review 与上层评测。
 

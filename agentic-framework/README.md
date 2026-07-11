@@ -186,13 +186,20 @@ for f in "${agents[@]}";   do rm -f ".claude/agents/$f";   done
 
 ## 工具脚本
 
-框架 `scripts/` 下的维护脚本：
+框架 `scripts/` 下的维护脚本（只服务框架仓库本身，不随安装分发）：
 
 | 脚本 | 用途 |
 |------|------|
 | `install_agentic_framework.py` | 把 `skills/` / `agents/` / `commands/` 安装进目标目录的 `.claude` 与 `.codex` |
 | `lint_skill_graph.py` | 静态校验 skill 引用图：dangling、command 目标缺失、name / 目录名一致、frontmatter description 完整、review 档位→reviewer 映射闭环、orphan |
-| `lint_task_deps.py` | 校验 tasks.md 依赖：dangling 依赖、循环依赖、以及「改同一文件却无依赖关系」的并行冲突 |
+
+流程门禁脚本随 `workflow-code-generation` skill 分发（`skills/workflow-code-generation/scripts/`，安装后在目标项目的 skill 目录内可用）：
+
+| 脚本 | 用途 |
+|------|------|
+| `lint_task_deps.py` | 校验 tasks.md 依赖与字段：dangling 依赖、循环依赖、「改同一文件却无依赖关系」的并行冲突、必填字段（review_profile / context_files / verification / artifacts / 状态）齐全合法 |
+| `lint_spec.py` | 校验 spec.md 章节完整性：状态字段合法、design 阶段查 1～3 章 / code 阶段查 1～4 章（Quick Draft 查简化章节），对照模板识别「复制未填」的占位章节 |
+| `check_delivery.py` | 交付门：tasks.md 全部任务终态且附原因、spec 已归档（Archived）、git 工作区干净 |
 
 ```bash
 # lint：有 ERROR 退出码 1，可进 CI / pre-commit
@@ -201,8 +208,14 @@ python scripts/lint_skill_graph.py
 # graph：输出 Markdown 引用图，交给 LLM 判定语义遗漏 / 多余
 python scripts/lint_skill_graph.py --graph
 
-# 校验 tasks.md 依赖关系
-python scripts/lint_task_deps.py <tasks.md>
+# 校验 tasks.md 依赖关系与必填字段
+python skills/workflow-code-generation/scripts/lint_task_deps.py <tasks.md>
+
+# 校验 spec.md 章节完整性（设计前 design / 编码前 code）
+python skills/workflow-code-generation/scripts/lint_spec.py <spec.md> --phase code
+
+# 交付门：宣布交付前必须通过（Fast-Path 只传 --repo）
+python skills/workflow-code-generation/scripts/check_delivery.py --tasks <tasks.md> --spec <spec.md>
 ```
 
 ---

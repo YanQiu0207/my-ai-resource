@@ -129,35 +129,46 @@ knowledge-base/
         <topic>/
             index.md
             <knowledge>.md
-    projects/
-        <project>/
-            index.md
-            decisions/
-            conventions/
-            insights/
-    changes/
-        <date>-<task>/
-            requirement.md
-            result.md
-            delta.md
     issues/
         <issue>.md
     sources/
         articles/
         official-docs/
+    changes/
+        <date>-<task>/
+            requirement.md
+            result.md
+            delta.md
+    projects/
+        <project>/
+            index.md
     archives/
 ```
 
 | 目录 | 职责 |
 | --- | --- |
-| `domains/` | 跨项目复用的方法、概念和实践 |
-| `projects/` | 具体项目的决策、约束、规范和洞察 |
-| `changes/` | 单次任务的输入、实际结果和待归档增量 |
-| `issues/` | 已验证的故障、根因、修复与适用边界 |
-| `sources/` | 原始文章和官方资料，作为证据来源 |
-| `archives/` | 不再活跃但仍需追溯的内容 |
+| `domains/` | 跨项目复用的方法、概念和实践，本库唯一的长期知识权威层 |
+| `issues/` | 已查证的故障与踩坑：现象、根因、修复、适用边界；不收未验证的猜测 |
+| `sources/` | 原始文章和官方资料，作为证据来源；现有 `notes/` 迁入此处 |
+| `changes/` | 单次任务的输入、实际结果和待归档增量；仅收无项目仓库归属的个人任务，有仓库的项目任务由项目内 `design-docs/` 承担 |
+| `projects/` | 每个项目一个 `index.md` 指针：项目知识的权威位置在项目仓库 `docs/`（adr、arch-snapshots、design-docs、issues），此处只放指向和不适合进项目仓库的个人评注 |
+| `archives/` | 仅在整个主题或项目退役时整目录移入；单条知识的过期不进这里，见归档规则 |
 
 代码的当前结构、接口和调用链容易随提交变化，不宜长期手工维护；需要保存时，应记录 Git commit，并明确它是可能过期的快照。
+
+#### 位置与接线
+
+- 知识库不放在任何项目内，由用户选定一个独立目录或独立仓库。
+- 路径的唯一权威记录在 `~/.claude/CLAUDE.md`，各项目不复制路径。
+- 各项目通过 `project-init` 的接线步骤在 AGENTS.md 写入「知识库」章节，声明：路径、检索时机（需求澄清、方案设计、编码实现、排查 bug 前先查根 `index.md`）、两跳定位、禁止全库通配。
+
+#### 归档规则
+
+按内容粒度区分三种情况，不做「单条知识移动归档」：
+
+- 内容过期 → 原地改写，Git diff 即追溯。
+- 结论被取代但有历史价值（如「为什么放弃了 X」）→ 标记 `status: deprecated`，原地保留，链接不失效。
+- 整个主题或项目不再活跃 → 整目录移入 `archives/`，同时更新根索引，使其退出日常检索范围。
 
 ### 4.3 知识条目契约
 
@@ -229,6 +240,8 @@ tags:
 - 哪些内容只需保留在任务记录中？
 - 对应索引是否已更新？
 
+长期知识按作用域归位：与项目绑定的写入项目仓库 `docs/`（决策进 adr、踩坑进 issues）；剥离项目上下文后仍然成立的晋升到 `domains/`，原位置留引用，保持单一权威。
+
 #### 新鲜度管理
 
 - 项目知识记录 Git commit。
@@ -236,6 +249,28 @@ tags:
 - 源发生变化时，先将相关知识标记为 `stale`。
 - 根据 diff 更新自动事实，并保留人工经验。
 - 无法核实的旧内容标记为 `uncertain`，不继续作为确定事实使用。
+
+### 4.5 被使用与被更新的保证
+
+AGENTS.md 的常驻说明只是弱信号：长会话中的上下文压缩和注意力衰减会让它失效（第二篇第 508～528 行的问题 1）。保证知识库真正被使用和更新，必须把读写挂点显式写进工作流步骤——「把 AI 看不见的东西挪到它一定看得见的地方」（第二篇第 445 行）。
+
+读侧（保证被使用），侵入 agentic-framework 的调研类步骤：
+
+- `workflow-requirements-clarification` Step 1：调研代码前先检索已有 ADR、历史 spec、issues 与共用知识库。
+- `workflow-system-design` Step 0 与 `workflow-quick-design` Step 2：设计前先读相关 ADR 和踩坑，已定决策约束设计空间。
+- `codebase-researcher` 第二步：调查前先查 arch-snapshots，`vcs_ref` 新鲜的快照作导航起点。
+- `troubleshooting` 历史案例：排查前先查项目 `docs/issues/` 与共用知识库 `issues/`。
+
+写侧（保证被更新），挂在既有强制门禁上：
+
+- `workflow-code-generation` 步骤 6 交付前沉淀检查（Fast-Path 与恢复路径均不豁免）承载 ADR、issues 回写与共用库晋升。
+- `codebase-researcher` 第五步承载快照落地。
+- `troubleshooting` 案例沉淀承载故障回写。
+- `workflow-code-generation` 不加读侧挂点：标准流程的知识消费发生在上游设计工作流，Fast-Path 仅限单文件极轻改动。
+
+维护保障：`lint_skill_graph.py` 保证引用目标存在、skill 不成为孤儿节点（L1 结构检查）；「引用存在但工作流步骤没真加载」的语义断链 lint 查不出，靠 `--graph` 输出的引用图做人工或 LLM 审查。
+
+个人库侧没有工作流强制：任务归档清单目前是软约束，是否升级为硬门禁，阶段二依据实际遵从情况评估。
 
 ## 5. MVP 实施路线
 
@@ -297,6 +332,8 @@ tags:
 - 自动将所有聊天记录写入长期知识。
 
 这些能力会增加同步、评估和治理成本，但不是验证个人知识库价值的必要条件。
+
+另有一项显式排除：不对齐 OpenSpec 目录结构。OpenSpec 的核心是维护「当前行为」的中央规范库（`specs/`），与本方案「现状以代码为准」的原则冲突；其 `changes/` 加增量归档的思想已由 `delta.md` 吸收。
 
 ## 8. 来源限制
 

@@ -5,7 +5,13 @@ import tempfile
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(
+    0,
+    str(
+        Path(__file__).resolve().parents[1]
+        / "skills" / "workflow-code-generation" / "scripts"
+    ),
+)
 import lint_task_deps
 
 
@@ -29,6 +35,30 @@ class TaskDependencyTest(unittest.TestCase):
             tasks_file = Path(temp_dir) / "tasks.md"
             tasks_file.write_text(text, encoding="utf-8")
             self.assertEqual(2, lint_task_deps.main([str(tasks_file)]))
+
+    def test_missing_required_fields_are_errors(self) -> None:
+        tasks = lint_task_deps.parse_tasks("### 任务 1：A\n- depends_on: []\n")
+        errors = lint_task_deps.field_errors(tasks)
+        for name in lint_task_deps.REQUIRED_FIELDS:
+            self.assertTrue(any(f"缺少 {name} 字段" in e for e in errors), name)
+
+    def test_invalid_profile_and_state_are_errors(self) -> None:
+        text = (
+            "### 任务 1：A\n- depends_on: []\n- review_profile: heavy\n"
+            "- context_files:\n- verification:\n- artifacts:\n- 状态: 已完结\n"
+        )
+        errors = lint_task_deps.field_errors(lint_task_deps.parse_tasks(text))
+        self.assertTrue(any("review_profile `heavy` 不合法" in e for e in errors))
+        self.assertTrue(any("状态 `已完结` 不含合法值" in e for e in errors))
+
+    def test_valid_fields_pass(self) -> None:
+        text = (
+            "### 任务 1：A\n- depends_on: []\n- review_profile: standard\n"
+            "- context_files:\n- verification:\n- artifacts:\n"
+            "- 状态: 未开始    （合法值：未开始 / 进行中 / 完成 / 需人工 / 阻塞）\n"
+        )
+        errors = lint_task_deps.field_errors(lint_task_deps.parse_tasks(text))
+        self.assertEqual([], errors)
 
 
 if __name__ == "__main__":

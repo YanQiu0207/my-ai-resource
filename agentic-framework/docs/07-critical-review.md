@@ -31,7 +31,7 @@
 > ✅ **已补**：`scripts/lint_skill_graph.py`（dangling / orphan / name 一致 / command 目标）+ `--graph` 输出供 LLM 判语义遗漏。但它只查「目标存不存在、连不连通」，查不出「语义没接对」——后者仍靠 review。
 
 **6. tasks.md 依赖正确性是阿喀琉斯之踵。** 并行分波正确性全压在 `depends_on` 上，而它由人审批，人最不擅长发现「缺失的依赖」，漏一条就可能静默错。
-> ✅ **已补**：`scripts/lint_task_deps.py`（dangling 依赖 / 循环依赖 / 「改同一文件却无依赖关系」的并行冲突）已接入执行段 Phase 0，构建波前机器校验。它给客观信号（文件重叠 + 无依赖），是否真要串行仍由人判断。
+> ✅ **已补**：`skills/workflow-code-generation/scripts/lint_task_deps.py`（dangling 依赖 / 循环依赖 / 「改同一文件却无依赖关系」的并行冲突 / 必填字段）已接入执行段 Phase 0，构建波前机器校验。它给客观信号（文件重叠 + 无依赖），是否真要串行仍由人判断。
 
 ## 改进建议（按性价比，标注状态）
 

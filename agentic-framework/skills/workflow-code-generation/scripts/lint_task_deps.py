@@ -7,6 +7,8 @@
 - **循环依赖**：依赖图存在环，违反 DAG 约定（ERROR）。
 - **并行冲突**：两个任务改同一文件、却无依赖关系——会被分到同一波并行执行，
   worktree 合并时冲突或顺序错（WARN，提示确认是否补 `depends_on`）。
+- **必填字段**：每个任务须有 `review_profile`（lightweight / standard / strict）、
+  `context_files`、`verification`、`artifacts`、`状态`（合法值），缺失或非法（ERROR）。
 
 只查「文件重叠 + 无依赖」这一客观信号；是否真要串行由人判断（重叠可能是有意且已处理）。
 """
@@ -20,6 +22,10 @@ from pathlib import Path
 
 TASK_HEADER = re.compile(r"^###\s*任务\s*(\d+)\s*[:：]", re.MULTILINE)
 BACKTICK = re.compile(r"`([^`]+)`")
+
+REVIEW_PROFILES = {"lightweight", "standard", "strict"}
+TASK_STATES = ("未开始", "进行中", "完成", "需人工", "阻塞")
+REQUIRED_FIELDS = ("review_profile", "context_files", "verification", "artifacts", "状态")
 
 
 def field(body: str, name: str) -> str:
@@ -63,8 +69,46 @@ def parse_tasks(text: str) -> dict[int, dict]:
         files = {p.strip() for p in BACKTICK.findall(field(body, "文件"))}
         deps, has_dep_field = parse_deps(body)
         deps.discard(tid)
-        tasks[tid] = {"files": files, "deps": deps, "has_dep_field": has_dep_field}
+        tasks[tid] = {
+            "files": files,
+            "deps": deps,
+            "has_dep_field": has_dep_field,
+            "body": body,
+        }
     return tasks
+
+
+def parse_state(value: str) -> str | None:
+    """从 `状态` 字段值里取合法状态词（允许后跟原因等附注），无则返回 None。"""
+    for state in TASK_STATES:
+        if value.startswith(state):
+            return state
+    return None
+
+
+def field_errors(tasks: dict[int, dict]) -> list[str]:
+    """校验每个任务的必填字段与合法值。"""
+    errors: list[str] = []
+    for tid, info in sorted(tasks.items()):
+        body = info["body"]
+        for name in REQUIRED_FIELDS:
+            if not has_field(body, name):
+                errors.append(f"任务 {tid} 缺少 {name} 字段")
+        if has_field(body, "review_profile"):
+            profile = field(body, "review_profile")
+            if profile not in REVIEW_PROFILES:
+                errors.append(
+                    f"任务 {tid} 的 review_profile `{profile}` 不合法"
+                    f"（lightweight / standard / strict）"
+                )
+        if has_field(body, "状态"):
+            status_value = field(body, "状态")
+            if parse_state(status_value) is None:
+                errors.append(
+                    f"任务 {tid} 的 状态 `{status_value}` 不含合法值"
+                    f"（{' / '.join(TASK_STATES)}）"
+                )
+    return errors
 
 
 def reachable(tasks: dict[int, dict]) -> dict[int, set[int]]:
@@ -118,6 +162,9 @@ def main(argv: list[str]) -> int:
         for dep in sorted(info["deps"]):
             if dep not in tasks:
                 errors.append(f"任务 {tid} 依赖不存在的任务 {dep}")
+
+    # 必填字段与合法值
+    errors.extend(field_errors(tasks))
 
     reach = reachable(tasks)
 
