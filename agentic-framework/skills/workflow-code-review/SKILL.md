@@ -40,7 +40,7 @@ description: 代码评审。按风险档位协调 reviewer subagent 进行并行
 - **核验范围只有两件事**：上一轮 keep 的每条 finding 是否已修复；修复 diff 本身是否引入新问题。**禁止对修复 diff 之外的代码提出新 finding**——全量扫描是首轮的责任，不靠复审轮补漏。
 - **派发收窄**：只派上一轮 keep finding 所属维度的 reviewer（每维度一个）；`review-critic` 不参与复审，除非复审轮新增 P0 / P1 finding。
 - **无上一轮 keep finding 的修复**（机器验证 / 前端验证等非 review finding 触发的代码修复）：只执行第二件事——核验修复 diff 是否引入新问题；reviewer 按当前 `review_profile` 的组合派发，审查范围仍限修复 diff。
-- **输出增量报告**：每条原 finding 标「已修复 / 未修复 / 部分修复」+ 依据；修复引入的新 finding 单独列出（沿用 `F-{seq}` 续号）；总体结论仍为 PASS / NEEDS_CHANGES。
+- **输出增量报告**：沿用第 7 步固定模板，轮次写「复审第 N 轮」（N = 上一轮轮次 + 1，首审记第 0 轮；无上一轮报告的验证类修复复审从第 1 轮起）。裁决明细中每条原 finding 标「已修复 / 未修复 / 部分修复」+ 依据；正式问题区只列未修复 / 部分修复的原 finding 与修复引入的新 finding（沿用 `F-{seq}` 续号），新 finding 标题加「（新增）」，如 `#### P1-2（新增）: ...`；总体结论仍为 PASS / NEEDS_CHANGES。
 
 ### 循环语义（调用方必须遵守）
 
@@ -211,7 +211,7 @@ description: 代码评审。按风险档位协调 reviewer subagent 进行并行
 
 ### 7. 输出最终报告
 
-按以下模板输出（整个系统唯一固定格式）：
+按以下模板输出（整个系统唯一固定格式）。该模板同时是遥测质量账的解析接口（见 [11-session-telemetry.md](../../docs/11-session-telemetry.md)），「轮次」字段与复审报告的「（新增）」标记是指标数据源，不得省略：
 
 ```markdown
 # Code Review 报告
@@ -220,6 +220,7 @@ description: 代码评审。按风险档位协调 reviewer subagent 进行并行
 - **Spec**: [路径 或 N/A]
 - **Tasks**: [路径 或 N/A]
 - **当前 Task**: [ID/名称 或 N/A]
+- **轮次**: 首审 / 复审第 N 轮
 - **审查文件**: [文件列表]
 
 ## 总体结论: PASS / NEEDS_CHANGES

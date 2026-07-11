@@ -221,6 +221,10 @@ python skills/workflow-code-generation/scripts/check_delivery.py --tasks <tasks.
 # token、子 agent 成本与 review 结论轨迹（可追踪第一层，零运行时侵入）
 python scripts/analyze_session_metrics.py --project-dir <claude项目目录>
 python scripts/analyze_session_metrics.py --codex-dir ~/.codex/sessions --cwd <项目路径>
+
+# 账本 upsert（本项目账本固定在 metrics/session-history.jsonl，随 git 提交；
+# 进行中的会话入账后重跑自愈）
+python scripts/analyze_session_metrics.py --project-dir <claude项目目录> --history metrics/session-history.jsonl
 ```
 
 ---

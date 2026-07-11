@@ -15,7 +15,12 @@ Claude 额外识别 `Skill` 工具调用与 `<command-name>` 命令注入。
 不使用工具返回值里的标记——Read 技能文件正文会误触发。
 
 质量账：按 workflow-code-review 的固定报告格式（`# Code Review 报告` +
-`## 总体结论`）提取每份报告的结论与 P0/P1/P2 数，输出会话内结论轨迹。
+`## 总体结论` + `**轮次**` 字段 + 复审报告的「（新增）」标记）提取每份
+报告的结论、P0/P1/P2 数与轮次，输出会话内结论轨迹，并按流（主链与每个
+子 agent 各自成流）重建修复循环，产出 ADR 003 两个质量指标的计数：
+复审轮新增 P0/P1 比例、需人工率（复审第 2 轮仍 NEEDS_CHANGES 即需人工，
+推导依赖 SKILL.md 固定的轮次上限；口径见 docs/11-session-telemetry.md）。
+2026-07 前的历史报告无轮次字段，轨迹中标「?」，不进入上述两个指标。
 
 耗时口径：活跃时长 = 相邻条目间隔之和，单个间隔超过 --idle-gap 秒（默认
 300）的部分视为空闲（等待用户输入）剔除。
@@ -24,7 +29,8 @@ Claude 额外识别 `Skill` 工具调用与 `<command-name>` 命令注入。
     python analyze_session_metrics.py <session.jsonl> [more.jsonl ...]
     python analyze_session_metrics.py --project-dir <claude项目目录>
     python analyze_session_metrics.py --codex-dir ~/.codex/sessions --cwd E:/work/xxx
-    可选：--json <out.json> 机器可读结果；--history <file> 按会话去重追加账本；
+    可选：--json <out.json> 机器可读结果；--history <file> 按会话 upsert 账本
+          （新会话追加，已有会话用最新解析覆盖）；
           --rates <rates.json> 成本折算，格式 {"模型名子串": {"input": 美元/MTok,
           "cache_read": .., "cache_write": .., "output": ..}}
 """
@@ -37,17 +43,21 @@ import json
 import re
 import sys
 from collections import Counter, defaultdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
-# 标记须独占一行（允许引用/加粗/反引号包裹），防止讨论标记的正文误触发切换
+# 标记须独占一行，允许引用/加粗/反引号包裹；不认列表前缀（-、* + 空格）——
+# 正文以列表罗列 Using xxx 示例是实测误报源
 MARKER_RE = re.compile(
-    r"^[\s>*`-]*Using ([a-z][a-z0-9]*(?:-[a-z0-9]+)+)[\s`*]*$", re.MULTILINE)
+    r"^>?\s*(?:\*\*)?`?Using ([a-z][a-z0-9]*(?:-[a-z0-9]+)+)[\s`*]*$",
+    re.MULTILINE)
 COMMAND_RE = re.compile(r"<command-name>/([a-z0-9-]+)</command-name>")
 # 行首锚定防止正文提及误报；级数与后缀放宽（历史报告存在 ## 级、带后缀的变体）
 REVIEW_HEAD_RE = re.compile(r"^\s{0,3}#{1,3}\s*Code Review 报告.*$", re.MULTILINE)
 REVIEW_VERDICT_RE = re.compile(r"总体结论[:：]?\s*\**\s*(PASS|NEEDS_CHANGES)")
-REVIEW_P_RE = re.compile(r"^#{3,4}\s*P([012])-\d+", re.MULTILINE)
+# 轮次是 2026-07 加入模板的字段；括号与「新增」标记放宽半角变体
+REVIEW_ROUND_RE = re.compile(r"轮次\**\s*[:：]\s*\**\s*(?:首审|复审第\s*(\d+)\s*轮)")
+REVIEW_P_RE = re.compile(r"^#{3,4}\s*P([012])-\d+\s*([（(]\s*新增\s*[）)])?", re.MULTILINE)
 UNMARKED = "(未标记)"
 TOKEN_KEYS = ("input", "output", "cache_read", "cache_write")
 
@@ -73,7 +83,7 @@ def make_entry(ts: float, usage=None, model=None, anchors=None, tools=None) -> d
 
 
 def extract_reviews(text: str, ts: float) -> list[dict]:
-    """按 workflow-code-review 固定报告格式提取结论与 P0/P1/P2 数。"""
+    """按 workflow-code-review 固定报告格式提取结论、P0/P1/P2 数与轮次。"""
     reviews = []
     heads = list(REVIEW_HEAD_RE.finditer(text))
     for i, head in enumerate(heads):
@@ -81,9 +91,18 @@ def extract_reviews(text: str, ts: float) -> list[dict]:
         verdict = REVIEW_VERDICT_RE.search(seg)
         if not verdict:
             continue
-        counts = Counter(REVIEW_P_RE.findall(seg))
-        reviews.append({"ts": ts, "verdict": verdict.group(1),
-                        "p0": counts["0"], "p1": counts["1"], "p2": counts["2"]})
+        round_m = REVIEW_ROUND_RE.search(seg)
+        # 首审记 0，复审第 N 轮记 N；无轮次字段（旧报告）记 None
+        rnd = None if not round_m else int(round_m.group(1) or 0)
+        counts, new_counts = Counter(), Counter()
+        for sev, is_new in REVIEW_P_RE.findall(seg):
+            counts[sev] += 1
+            if is_new:
+                new_counts[sev] += 1
+        reviews.append({"ts": ts, "verdict": verdict.group(1), "round": rnd,
+                        "p0": counts["0"], "p1": counts["1"], "p2": counts["2"],
+                        "new_p0": new_counts["0"], "new_p1": new_counts["1"],
+                        "new_p2": new_counts["2"]})
     return reviews
 
 
@@ -96,6 +115,8 @@ def read_claude(path: Path) -> tuple[list[dict], list[dict], str | None]:
             try:
                 obj = json.loads(line)
             except json.JSONDecodeError:
+                continue
+            if not isinstance(obj, dict):
                 continue
             if obj.get("type") not in ("user", "assistant") or obj.get("isSidechain"):
                 continue
@@ -165,6 +186,8 @@ def read_claude_subagents(session_path: Path) -> list[dict]:
                     obj = json.loads(line)
                 except json.JSONDecodeError:
                     continue
+                if not isinstance(obj, dict):
+                    continue
                 ts = entry_ts(obj)
                 if ts is None:
                     continue
@@ -194,6 +217,8 @@ def read_codex(path: Path) -> tuple[list[dict], list[dict], str | None]:
             try:
                 obj = json.loads(line)
             except json.JSONDecodeError:
+                continue
+            if not isinstance(obj, dict):
                 continue
             ts = entry_ts(obj)
             if ts is None:
@@ -267,6 +292,53 @@ def new_bucket() -> dict:
             "sub_agents": Counter(), "tools": Counter()}
 
 
+def summarize_quality(reviews: list[dict]) -> dict:
+    """按流重建修复循环，产出 ADR 003 质量指标的原始计数。
+
+    循环 = 首审 NEEDS_CHANGES 开启（无首审的验证类修复复审链首个复审也
+    开启，见 SKILL.md 复审模式），复审 PASS 收敛 / 复审第 2 轮及以上仍
+    NEEDS_CHANGES 需人工 / 到流结束（或下一首审）没等到终态则未收敛。
+    无轮次字段的旧报告只计数，不进入循环重建。
+    """
+    streams: dict[str, list[dict]] = defaultdict(list)
+    for r in reviews:
+        streams[r.get("stream", "main")].append(r)
+    q = Counter()
+    for seq in streams.values():
+        pending = False  # 当前流有已开启、未到终态的循环
+        for r in seq:
+            rnd = r.get("round")
+            if rnd is None:
+                q["unrounded"] += 1
+                continue
+            if rnd == 0:
+                if pending:
+                    q["unresolved_loops"] += 1
+                q["first_reviews"] += 1
+                pending = r["verdict"] == "NEEDS_CHANGES"
+                if pending:
+                    q["loops"] += 1
+            else:
+                if not pending:
+                    # 验证类修复复审链没有首审报告，此处开启循环，
+                    # 保证需人工（分子）不会计入分母未覆盖的链
+                    q["loops"] += 1
+                    pending = True
+                q["rereviews"] += 1
+                if r["new_p0"] or r["new_p1"]:
+                    q["rereviews_with_new_p01"] += 1
+                if r["verdict"] == "PASS":
+                    pending = False
+                elif rnd >= 2:
+                    q["manual_loops"] += 1
+                    pending = False
+        if pending:
+            q["unresolved_loops"] += 1
+    keys = ("first_reviews", "loops", "rereviews", "rereviews_with_new_p01",
+            "manual_loops", "unresolved_loops", "unrounded")
+    return {k: q[k] for k in keys}
+
+
 def analyze_session(path: Path, idle_gap: float) -> dict:
     source = detect_source(path)
     entries, subagents, cwd = (read_codex if source == "codex" else read_claude)(path)
@@ -293,7 +365,7 @@ def analyze_session(path: Path, idle_gap: float) -> dict:
         for t in e["tools"]:
             bucket["tools"][t] += 1
         for r in e["reviews"]:
-            reviews.append({**r, "phase": current})
+            reviews.append({**r, "phase": current, "stream": "main"})
         if e["usage"] is not None:
             bucket["requests"] += 1
             bucket["tokens"].update(e["usage"])
@@ -301,7 +373,7 @@ def analyze_session(path: Path, idle_gap: float) -> dict:
 
     starts = [t for t, _ in timeline]
     agent_types = Counter()
-    for agent in subagents:
+    for i, agent in enumerate(subagents):
         idx = bisect.bisect_right(starts, agent["first"]) - 1
         phase = timeline[idx][1] if idx >= 0 else UNMARKED
         phases[phase]["sub_tokens"].update(agent["tokens"])
@@ -310,7 +382,11 @@ def analyze_session(path: Path, idle_gap: float) -> dict:
         for m, c in agent.get("model_tokens", {}).items():
             model_tokens[m].update(c)
         for r in agent["reviews"]:
-            reviews.append({**r, "phase": phase, "agent": agent["agent_type"]})
+            reviews.append({**r, "phase": phase, "agent": agent["agent_type"],
+                            "stream": f"sub-{i}"})
+
+    def iso(ts: float) -> str:
+        return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
 
     reviews.sort(key=lambda r: r["ts"])
     return {
@@ -318,11 +394,14 @@ def analyze_session(path: Path, idle_gap: float) -> dict:
         "session": path.stem,
         "cwd": cwd,
         "entries": len(entries),
+        "started_at": iso(entries[0]["ts"]) if entries else None,
+        "ended_at": iso(entries[-1]["ts"]) if entries else None,
         "wall_seconds": (entries[-1]["ts"] - entries[0]["ts"]) if entries else 0.0,
         "idle_seconds": idle_seconds,
         "subagent_types": dict(agent_types),
         "model_tokens": {m: dict(c) for m, c in model_tokens.items()},
         "reviews": reviews,
+        "quality": summarize_quality(reviews),
         "phases": {
             name: {
                 "active_seconds": round(b["active_seconds"], 1),
@@ -364,8 +443,11 @@ def fmt_tokens(n: int) -> str:
 
 
 def fmt_review(r: dict) -> str:
+    rnd = r.get("round")
+    label = "?" if rnd is None else ("首审" if rnd == 0 else f"复审{rnd}")
     parts = [f"P{i}×{r[f'p{i}']}" for i in range(3) if r[f"p{i}"]]
-    return r["verdict"] + (f"({' '.join(parts)})" if parts else "")
+    parts += [f"新增P{i}×{r[f'new_p{i}']}" for i in range(3) if r.get(f"new_p{i}")]
+    return f"{label} {r['verdict']}" + (f"({' '.join(parts)})" if parts else "")
 
 
 def print_report(results: list[dict], min_share: float, rates: dict | None) -> None:
@@ -379,6 +461,11 @@ def print_report(results: list[dict], min_share: float, rates: dict | None) -> N
                 f"{k}×{v}" for k, v in sorted(r["subagent_types"].items(), key=lambda x: -x[1])))
         if r["reviews"]:
             print("   review 轨迹：" + " → ".join(fmt_review(x) for x in r["reviews"]))
+        q = r.get("quality") or {}
+        if q.get("loops") or q.get("rereviews"):
+            print(f"   修复循环：{q['loops']} 个（需人工 {q['manual_loops']}"
+                  f" · 未收敛 {q['unresolved_loops']}）  复审轮 {q['rereviews']}"
+                  f"（含新增 P0/P1 的 {q['rereviews_with_new_p01']}）")
         if rates:
             cost, unmatched = estimate_cost(r["model_tokens"], rates)
             note = f"（未折算模型：{', '.join(unmatched)}）" if unmatched else ""
@@ -410,28 +497,57 @@ def print_report(results: list[dict], min_share: float, rates: dict | None) -> N
             print(f"{name:<34}{v['enter']:>4}{fmt_duration(v['active']):>10}"
                   f"{v['active'] / total:>6.0%}{fmt_tokens(v['out']):>12}")
 
+    q = Counter()
+    for r in results:
+        q.update(r.get("quality") or {})
+    if q["loops"] or q["rereviews"] or q["unrounded"]:
+        def ratio(num: int, den: int) -> str:
+            return f"{num}/{den}" + (f"（{num / den:.0%}）" if den else "")
+        print(f"\n== 质量指标（ADR 003 口径，{len(results)} 个会话）")
+        print(f"复审轮新增 P0/P1 比例：{ratio(q['rereviews_with_new_p01'], q['rereviews'])}")
+        print(f"需人工率：{ratio(q['manual_loops'], q['loops'])}")
+        print(f"未收敛循环 {q['unresolved_loops']} · 无轮次标记报告 {q['unrounded']}（不计入指标）")
 
-def append_history(results: list[dict], history_path: Path) -> int:
-    """按 (source, session) 去重追加账本，返回新增条数。"""
-    seen = set()
+
+def append_history(results: list[dict], history_path: Path) -> tuple[int, int]:
+    """按 (source, session) upsert 账本：新会话追加，已有会话用最新解析覆盖。
+
+    返回 (新增条数, 更新条数)。进行中的会话首次入账后，会话继续增长时
+    重跑即自愈，不会永久冻结不完整快照。无法解析的旧行原样保留。
+    """
+    raw_kept: list[str] = []
+    entries: dict[tuple, str] = {}
     if history_path.is_file():
         with open(history_path, encoding="utf-8") as f:
             for line in f:
+                line = line.rstrip("\n")
+                if not line:
+                    continue
                 try:
                     old = json.loads(line)
-                    seen.add((old.get("source"), old.get("session")))
                 except json.JSONDecodeError:
+                    raw_kept.append(line)
                     continue
-    added = 0
-    with open(history_path, "a", encoding="utf-8") as f:
-        for r in results:
-            key = (r["source"], r["session"])
-            if key in seen:
-                continue
-            seen.add(key)
-            f.write(json.dumps(r, ensure_ascii=False) + "\n")
+                if isinstance(old, dict):
+                    entries[(old.get("source"), old.get("session"))] = line
+                else:
+                    raw_kept.append(line)
+    added = updated = 0
+    for r in results:
+        key = (r["source"], r["session"])
+        line = json.dumps(r, ensure_ascii=False)
+        if key not in entries:
             added += 1
-    return added
+        elif entries[key] != line:
+            updated += 1
+        else:
+            continue
+        entries[key] = line
+    if added or updated:
+        history_path.write_text(
+            "".join(x + "\n" for x in raw_kept + list(entries.values())),
+            encoding="utf-8")
+    return added, updated
 
 
 def main() -> int:
@@ -447,7 +563,7 @@ def main() -> int:
     parser.add_argument("--min-share", type=float, default=0.01,
                         help="低于该占比的阶段不打印（默认 0.01）")
     parser.add_argument("--json", help="额外输出 JSON 文件路径")
-    parser.add_argument("--history", help="按会话去重追加到该 JSONL 账本")
+    parser.add_argument("--history", help="按会话 upsert 到该 JSONL 账本")
     parser.add_argument("--rates", help="费率表 JSON（美元/MTok），启用成本折算")
     args = parser.parse_args()
 
@@ -469,7 +585,12 @@ def main() -> int:
         if not path.is_file():
             print(f"跳过（不存在）：{path}", file=sys.stderr)
             continue
-        result = analyze_session(path, args.idle_gap)
+        try:
+            result = analyze_session(path, args.idle_gap)
+        except Exception as exc:  # 单文件隔离：一个损坏会话不终止整批
+            print(f"跳过（解析失败）：{path}（{type(exc).__name__}: {exc}）",
+                  file=sys.stderr)
+            continue
         if args.cwd:
             want = args.cwd.replace("\\", "/").rstrip("/").lower()
             have = str(result["cwd"] or "").replace("\\", "/").rstrip("/").lower()
@@ -487,8 +608,10 @@ def main() -> int:
             json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"\nJSON 已写入 {args.json}")
     if args.history:
-        added = append_history(results, Path(args.history))
-        print(f"账本新增 {added} 条（已存在 {len(results) - added} 条跳过）→ {args.history}")
+        added, updated = append_history(results, Path(args.history))
+        unchanged = len(results) - added - updated
+        print(f"账本：新增 {added} 条，更新 {updated} 条，"
+              f"未变 {unchanged} 条 → {args.history}")
     return 0
 
 
