@@ -31,11 +31,28 @@ description: 代码评审。按风险档位协调 reviewer subagent 进行并行
 | 需求/设计符合度审查 | `spec-compliance-reviewer` | `standard` / `strict` 调用 |
 | 对抗性验证 | `review-critic` | `strict` 有 finding 时调用；`standard` 出现 P0 / P1 finding 时调用 |
 
+## 复审模式（re-review）
+
+修复-复审循环的第二轮及以后**必须**用本模式，不得重跑全量首轮。调用方传入 `rereview: true`、上一轮报告（裁决明细 + 正式问题）和修复 diff。
+
+与首轮的差异：
+
+- **核验范围只有两件事**：上一轮 keep 的每条 finding 是否已修复；修复 diff 本身是否引入新问题。**禁止对修复 diff 之外的代码提出新 finding**——全量扫描是首轮的责任，不靠复审轮补漏。
+- **派发收窄**：只派上一轮 keep finding 所属维度的 reviewer（每维度一个）；`review-critic` 不参与复审，除非复审轮新增 P0 / P1 finding。
+- **输出增量报告**：每条原 finding 标「已修复 / 未修复 / 部分修复」+ 依据；修复引入的新 finding 单独列出（沿用 `F-{seq}` 续号）；总体结论仍为 PASS / NEEDS_CHANGES。
+
+### 循环语义（调用方必须遵守）
+
+- 仅总体结论为 `NEEDS_CHANGES`（存在 keep 的 P0 / P1）触发「修复 → 复审」循环；**P2 与 follow-up note 不触发循环**，原样记入报告交用户决定。
+- 修复-复审最多 2 轮；第 2 轮复审仍 `NEEDS_CHANGES` → 调用方标「需人工」终止，禁止继续循环。
+
 ## 工作流
 
 ### 1. 解析 review 范围
 
 根据用户输入确定审查文件、diff 来源和 `review_profile`。若范围不清，先澄清再继续。
+
+> 调用方传入 `rereview: true` → 按上方「复审模式」执行（收窄核验范围与派发），不走全量首轮流程；Step 4-7 的去重、裁决与报告规则仍适用于复审产物。
 
 - 指定文件/spec/task → 直接使用
 - 给出 git diff/commit → 解析变更文件

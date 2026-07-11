@@ -57,7 +57,7 @@ for (const wave of args.waves) {
       `任务：${task.title}\nReview 档位：${task.review_profile}\nContext：${task.context_files}\n验证：${task.verification}\n产物：${task.artifacts}\n\n` +
       `完成后依次执行：\n` +
       `1. 确认所有子任务已完成；测试子任务须已调用 workflow-test-generation 生成并运行通过\n` +
-      `2. 按 task.review_profile 加载 workflow-code-review 并修复\n` +
+      `2. 按 task.review_profile 加载 workflow-code-review；结论 NEEDS_CHANGES（keep 的 P0/P1）→ 修复后按复审模式重跑，最多 2 轮，仍不过标「需人工」；P2 / follow-up 不触发修复循环，记入返回结论\n` +
       `3. 加载 workflow-verification 跑机器验证；有 config 必须传 --baseline ${args.baseline_path} --diff-base ${args.base_sha}，无 config 必须传 --diff-base ${args.base_sha}；FAIL 则修复重跑\n` +
       `4. 返回 verify_command、verify_report_path、spec_drift 结论；不输出完整 diff`,
       { label: task.id, phase: '执行', schema: RESULT_SCHEMA, isolation: 'worktree' }
@@ -101,7 +101,7 @@ Workflow 完成后，主会话拿到 `results` 数组，逐条更新 `tasks.md` 
 2. **质量门**（review + 机器验证，两者都过才算通过）：
    - 模式 A：owner 已跑完 review 与 `workflow-verification`，主 agent 只**收集**结论。
    - 模式 B：主 agent 对每个产物（在其 worktree 内）扮演 `workflow-code-review` 的 Judge 按 `review_profile` 裁决，再跑 `workflow-verification` 机器验证。
-3. **失败隔离**：测试 / review / 机器验证 任一不过 → 有限轮次（≤ 2）自修复重跑（A 在 owner 内、B 由主 agent 派 fixer 在同一 worktree 修）；仍不过、或子 agent 报范围 / 依赖问题无法在本 task 内解决 → 标 `需人工` 附原因 + 失败输出（review finding / 错误摘要）；**子 agent 崩溃 / 超时 / 无产物返回** → 标 `需人工` 注「agent 未返回，需重 dispatch」。标 `需人工` 的 task **其 worktree 保留**供排查、不清理。以上**均不阻塞同波其他 task、不停整个流程**。
+3. **失败隔离**：测试 / review（结论 `NEEDS_CHANGES`）/ 机器验证 任一不过 → 有限轮次（≤ 2）自修复重跑（review 重跑用复审模式；A 在 owner 内、B 由主 agent 派 fixer 在同一 worktree 修）；仍不过、或子 agent 报范围 / 依赖问题无法在本 task 内解决 → 标 `需人工` 附原因 + 失败输出（review finding / 错误摘要）；**子 agent 崩溃 / 超时 / 无产物返回** → 标 `需人工` 注「agent 未返回，需重 dispatch」。标 `需人工` 的 task **其 worktree 保留**供排查、不清理。以上**均不阻塞同波其他 task、不停整个流程**。
 4. **合并**：波内过质量门的 task，其 worktree / 分支**依次**合并回主分支（`git merge --no-ff <task-branch>`），成功即标 `完成`、清理 worktree（`git worktree remove`）；冲突 → 标 `需人工`（记冲突文件）、**worktree 保留待人工**，跳过、继续合并其余。
    - **上游未合并 → 下游阻塞**：某 task 标 `需人工` 后，**依赖它的后波 task 一并标 `阻塞`**（记「上游 Task N 未合并」）、跳过 dispatch——否则后波会 dispatch 在缺该产物的 HEAD 上，破坏「先建后迁后删可编译」。上游经人工解决并合并后方可解阻。
 5. **不停等用户**，进入下一波，直到所有波处理完。
