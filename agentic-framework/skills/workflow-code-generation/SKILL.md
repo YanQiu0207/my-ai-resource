@@ -1,6 +1,6 @@
 ---
 name: workflow-code-generation
-description: 代码文件修改的统一入口。任何代码变更（新功能、优化、Bug 修复、重构）必须先调用此 skill。按复杂度路由：极轻改动主会话直接改，中等及以上下放 agent 执行（tasks.md 批准后自主连跑，worktree 隔离、每产物过分级 workflow-code-review、末尾汇总 + intent 沉淀）。仅适用于代码文件（.cc/.cpp/.h/.go/.py 等），改 .md 等非代码文件不调用。
+description: 代码文件修改的统一入口。任何代码变更（新功能、优化、Bug 修复、重构）必须先调用此 skill。按复杂度路由：轻量改动（请求即计划）主会话直接改，中等及以上下放 agent 执行（tasks.md 批准后自主连跑，worktree 隔离、每产物过分级 workflow-code-review、末尾汇总 + intent 沉淀）。仅适用于代码文件（.cc/.cpp/.h/.go/.py 等），改 .md 等非代码文件不调用。
 ---
 
 > 输出一行：`Using workflow-code-generation`
@@ -100,7 +100,7 @@ tasks.md 经用户批准后，执行下放给 agent：**主会话只编排，不
 
 | 档位 | 适用 |
 | --- | --- |
-| `lightweight` | 小需求 / 低风险：单模块局部改动、不改公开接口、不碰数据 / 权限 / 并发 / 安全 / 性能关键路径 |
+| `lightweight` | 小需求 / 低风险：单模块局部改动（或同一模式的跨文件机械重复改动，如统一改名）、不改公开接口、不碰数据 / 权限 / 并发 / 安全 / 性能关键路径 |
 | `standard` | 默认档：普通功能、Bug 修复、跨 2-3 个模块但风险可控 |
 | `strict` | 高风险：生产关键路径、安全 / 权限 / 数据迁移 / 并发 / 分布式 / 性能敏感 / 公共 API / 大范围重构 |
 
@@ -120,7 +120,7 @@ tasks.md 经用户批准后，执行下放给 agent：**主会话只编排，不
 
 1. **汇总报告**（一次性，不逐 task）：每个 task 的实现 / review 结果，列出哪些 `需人工`（附原因）、哪些 `阻塞`（附上游归因，如「上游 Task N 未合并」）、哪些合并冲突。
 2. **最终审核**：对本次所有已合并入主分支的变更文件整体调用 `workflow-code-review`（`review_profile` 取各 task 中最高档位），聚焦跨 task 的集成问题（per-task review 已覆盖单 task 内部质量）；结论为 `NEEDS_CHANGES`（存在 keep 的 P0 / P1）→ **派 fix agent 修复后按复审模式重审**（主会话只编排，不亲自写代码），最多 2 轮；仍 `NEEDS_CHANGES` → 整体标 `需人工`，附 review finding 摘要，终止循环。**P2 / follow-up 不触发修复循环**，记入汇总报告。
-3. **机器验证**：对合并结果整体跑 `workflow-verification`。有 config 时必须传 `--baseline <repo-root>/.verify/baseline.json --diff-base <base_sha>`；无 config 时必须传 `--diff-base <base_sha>` 触发内置 spec drift 检查。FAIL → 派 fix agent 修复后回第 2 步重审再验，若只是无法证明相关规格已更新且确实无需更新，则补 `--spec-drift-reason` 后重跑；仍 FAIL 标 `需人工`；未验到列为风险。
+3. **机器验证**：对合并结果整体跑 `workflow-verification`。有 config 时必须传 `--baseline <repo-root>/.verify/baseline.json --diff-base <base_sha>`；无 config 时必须传 `--diff-base <base_sha>` 触发内置 spec drift 检查。FAIL → 派 fix agent 修复后回第 2 步重审（复审模式，范围为修复 diff）再验，若只是无法证明相关规格已更新且确实无需更新，则补 `--spec-drift-reason` 后重跑；仍 FAIL 标 `需人工`；未验到列为风险。
 4. **前端验证**：若涉及 UI / 样式 / `.tsx` / 用户操作路径，加载 `bp-frontend-taste` 后再用 `frontend-playwright-verification` 做浏览器验证。失败则修复后重跑；若修复产生代码改动，必须回到第 2 步重新最终审核（复审模式，范围为本次新增改动），再重新验证。无法验证则列为风险。
 5. **交付前沉淀检查**：见下方[「交付前沉淀检查」](#交付前沉淀检查)，并逐条核销步骤 3 / Phase 1 预留的「intent 沉淀」任务。
 6. **归档**：按 `project-knowledge` 约定把 `spec.md` 头部 `状态` 改为 `Archived`（文件原地保留）。

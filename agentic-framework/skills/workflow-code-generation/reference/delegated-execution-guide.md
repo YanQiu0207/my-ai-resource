@@ -58,7 +58,7 @@ for (const wave of args.waves) {
       `完成后依次执行：\n` +
       `1. 确认所有子任务已完成；测试子任务须已调用 workflow-test-generation 生成并运行通过\n` +
       `2. 按 task.review_profile 加载 workflow-code-review；结论 NEEDS_CHANGES（keep 的 P0/P1）→ 修复后按复审模式重跑，最多 2 轮，仍不过标「需人工」；P2 / follow-up 不触发修复循环，记入返回结论\n` +
-      `3. 加载 workflow-verification 跑机器验证；有 config 必须传 --baseline ${args.baseline_path} --diff-base ${args.base_sha}，无 config 必须传 --diff-base ${args.base_sha}；FAIL 则修复重跑\n` +
+      `3. 加载 workflow-verification 跑机器验证；有 config 必须传 --baseline ${args.baseline_path} --diff-base ${args.base_sha}，无 config 必须传 --diff-base ${args.base_sha}；FAIL 则修复重跑；修复若产生代码 diff，须按复审模式（范围为该 diff）重过 review 再验\n` +
       `4. 返回 verify_command、verify_report_path、spec_drift 结论；不输出完整 diff`,
       { label: task.id, phase: '执行', schema: RESULT_SCHEMA, isolation: 'worktree' }
     )

@@ -13,7 +13,7 @@ description: 代码评审。按风险档位协调 reviewer subagent 进行并行
 
 | 档位 | 适用 | 调用 reviewer |
 | --- | --- | --- |
-| `lightweight` | 小需求 / 低风险：单模块局部改动、不改公开接口、不碰数据 / 权限 / 并发 / 安全 / 性能关键路径 | `comprehensive-reviewer`（一趟覆盖工程规范 + 需求符合度两维） |
+| `lightweight` | 小需求 / 低风险：单模块局部改动（或同一模式的跨文件机械重复改动，如统一改名）、不改公开接口、不碰数据 / 权限 / 并发 / 安全 / 性能关键路径 | `comprehensive-reviewer`（一趟覆盖工程规范 + 需求符合度两维） |
 | `standard` | 默认档：普通功能、Bug 修复、跨 2-3 个模块但风险可控 | `standards-reviewer`、`spec-compliance-reviewer`、`robustness-reviewer` |
 | `strict` | 高风险：生产关键路径、安全 / 权限 / 数据迁移 / 并发 / 分布式 / 性能敏感 / 公共 API / 大范围重构 | 全量 5 reviewer；有 finding 时调用 `review-critic` |
 
@@ -39,6 +39,7 @@ description: 代码评审。按风险档位协调 reviewer subagent 进行并行
 
 - **核验范围只有两件事**：上一轮 keep 的每条 finding 是否已修复；修复 diff 本身是否引入新问题。**禁止对修复 diff 之外的代码提出新 finding**——全量扫描是首轮的责任，不靠复审轮补漏。
 - **派发收窄**：只派上一轮 keep finding 所属维度的 reviewer（每维度一个）；`review-critic` 不参与复审，除非复审轮新增 P0 / P1 finding。
+- **无上一轮 keep finding 的修复**（机器验证 / 前端验证等非 review finding 触发的代码修复）：只执行第二件事——核验修复 diff 是否引入新问题；reviewer 按当前 `review_profile` 的组合派发，审查范围仍限修复 diff。
 - **输出增量报告**：每条原 finding 标「已修复 / 未修复 / 部分修复」+ 依据；修复引入的新 finding 单独列出（沿用 `F-{seq}` 续号）；总体结论仍为 PASS / NEEDS_CHANGES。
 
 ### 循环语义（调用方必须遵守）

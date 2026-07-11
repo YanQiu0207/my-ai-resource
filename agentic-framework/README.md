@@ -12,7 +12,7 @@
 
 - **复制**了原框架中与本场景相关的 `workflow-*` 全套及其运行依赖（`bp-*` / `std-*` / `project-knowledge` / `self-refinement` / `agents/` 评审 subagent / 命令入口）。
 - **未复制** `opsx-*`（OpenSpec 复刻）等与本场景无关的部分。
-- **改造** `workflow-code-generation`：把执行段从「逐 task 停等串行」升级为「复杂度路由 + 下放 agent 执行（极轻改动主会话直改、中等+ 单 / 并行 agent）」。
+- **改造** `workflow-code-generation`：把执行段从「逐 task 停等串行」升级为「复杂度路由 + 下放 agent 执行（轻量改动（请求即计划）主会话直改、中等+ 单 / 并行 agent）」。
 
 ## 组件说明
 
@@ -216,6 +216,11 @@ python skills/workflow-code-generation/scripts/lint_spec.py <spec.md> --phase co
 
 # 交付门：宣布交付前必须通过（Fast-Path 只传 --repo）
 python skills/workflow-code-generation/scripts/check_delivery.py --tasks <tasks.md> --spec <spec.md>
+
+# 会话遥测：从 Claude Code / Codex 已落盘的 transcript 回溯各阶段耗时、
+# token、子 agent 成本与 review 结论轨迹（可追踪第一层，零运行时侵入）
+python scripts/analyze_session_metrics.py --project-dir <claude项目目录>
+python scripts/analyze_session_metrics.py --codex-dir ~/.codex/sessions --cwd <项目路径>
 ```
 
 ---
@@ -235,9 +240,12 @@ python skills/workflow-code-generation/scripts/check_delivery.py --tasks <tasks.
 | [07-critical-review.md](docs/07-critical-review.md) | 框架独立批判性评估（短板 + 改进，标注已补项） | 审视框架短板 / 规划后续改进时 |
 | [08-evaluation-strategy.md](docs/08-evaluation-strategy.md) | 评测体系分层落地 + 框架特有难点 | 规划 / 落地 skill 评测时 |
 | [10-harness-engineering-practices.md](docs/10-harness-engineering-practices.md) | 两篇 Harness Engineering 实践分析 + 框架吸收建议 | 规划框架下一轮演进时 |
+| [11-session-telemetry.md](docs/11-session-telemetry.md) | 会话遥测体系：三层架构、第一层设计决策与指标解读边界 | 分析执行耗时 / token 数据，或改 review 报告模板前 |
 
 架构决策记录：
 
 | 文档 | 决策 |
 |------|------|
 | [001-machine-verification-gate.md](docs/adr/001-machine-verification-gate.md) | 将机器验证设为与 LLM Code Review 并列的合并前硬门 |
+| [002-retain-and-widen-fastpath.md](docs/adr/002-retain-and-widen-fastpath.md) | 保留 Fast-Path 并扩大适用范围（否决「统一 agent 执行」），主判据「请求即计划」 |
+| [003-review-fix-loop-convergence.md](docs/adr/003-review-fix-loop-convergence.md) | review 修复循环收敛：仅 NEEDS_CHANGES 触发 + 增量复审 + 2 轮上限 |
