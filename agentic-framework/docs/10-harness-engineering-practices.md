@@ -77,7 +77,7 @@
 | 独立质量门 | `workflow-verification` 与 LLM Review 并列，执行 build/test/lint、基线比较和 Spec Drift 检查（[`workflow-verification/SKILL.md`](../skills/workflow-verification/SKILL.md)，第 10～24、71～89 行） | 已吸收 |
 | 统一执行证据 | 交付必须列出提交、测试、Review、机器验证、前端验证和未验证风险（[`workflow-code-generation/SKILL.md`](../skills/workflow-code-generation/SKILL.md)，第 131～142 行） | 已吸收 |
 | 渐进上下文 | 每个 task 显式声明 `context_files`，下放 Agent 只接收任务相关上下文（[`03-parallel-execution-mode.md`](03-parallel-execution-mode.md)，第 30～41 行） | 部分吸收 |
-| 长期知识与增量沉淀 | 已有 ADR、架构快照、Feature Spec 和交付前 intent 检查；个人知识库方案已提出工作流读写挂点（[`09-personal-knowledge-base-plan.md`](09-personal-knowledge-base-plan.md)，第 255～273 行） | 设计已有，接线未完全落地 |
+| 长期知识与增量沉淀 | 已有 ADR、架构快照、Feature Spec 和交付前 intent 检查；需求、设计、代码调研、故障排查和交付流程均已接入知识读写挂点（[`09-personal-knowledge-base-plan.md`](09-personal-knowledge-base-plan.md)，第 255～273 行；[`codebase-researcher.md`](../agents/codebase-researcher.md)，第 23、56～68 行） | 已吸收 |
 | 分层评测 | 已有 Tier 0 结构门卫和 Tier 1 触发评估，Tier 2 效果评估按需（[`08-evaluation-strategy.md`](08-evaluation-strategy.md)，第 12～27、68～77 行） | 部分吸收 |
 
 ### 建议吸收
@@ -143,19 +143,6 @@ Profile 必须表达门禁集合和风险策略，不能只是两份重复 Promp
 
 **成功标准**：无需调用真实模型即可重复验证关键状态转换；同一输入多次运行得到相同流程结果。
 
-#### P1：把知识读写挂点接入 Workflow
-
-**问题**：框架已设计个人知识库和 intent 沉淀，但 `AGENTS.md` 常驻说明只是弱信号；现有方案也明确要求将读写挂到工作流步骤（[`09-personal-knowledge-base-plan.md`](09-personal-knowledge-base-plan.md)，第 255～273 行）。
-
-**最小吸收方式**：
-
-- 需求/设计前读取相关 ADR、历史 Spec、Issues 和共用知识索引。
-- Troubleshooting 前读取历史故障。
-- 交付门只检查本次是否产生可复用知识，由人确认是否晋升。
-- 继续坚持单一权威来源和两跳定位，不复制整份任务文档到长期知识。
-
-**成功标准**：新任务能引用已有结论及来源；任务结束能明确区分「只留任务记录」与「进入长期知识」。
-
 ### 生产 Profile 候选能力
 
 | 能力 | 两篇文章提供的启发 | 落地前需要补足 |
@@ -184,11 +171,10 @@ Profile 必须表达门禁集合和风险策略，不能只是两份重复 Promp
 1. **先做独立评审边界**：它直接修补高风险任务质量盲区，不引入新平台。
 2. **再记录轻量指标**：先获得真实成本和失败数据，再决定预算策略。
 3. **补控制流测试**：用 Mock 验证失败、重试、阻塞和恢复，证明 Harness 自身可靠。
-4. **接知识读写挂点**：复用已有 `09-personal-knowledge-base-plan.md`，避免另建一套知识体系。
-5. **定义 Profile 契约**：明确共享内核、`rapid` 与 `production` 的门禁差异，但先不复制 Skill。
-6. **选择一个生产试点**：用真实变更验证发布审批、回滚、生产验证和线上反馈闭环。
+4. **定义 Profile 契约**：明确共享内核、`rapid` 与 `production` 的门禁差异，但先不复制 Skill。
+5. **选择一个生产试点**：用真实变更验证发布审批、回滚、生产验证和线上反馈闭环。
 
-明确停止点：前 4 项完成后先运行 10 个真实任务；生产 Profile 先跑 1 个低爆炸半径的真实变更。没有数据证明新缺口前，不继续扩 Agent、扩阶段或建设平台。
+明确停止点：前 3 项完成后先运行 10 个真实任务；生产 Profile 先跑 1 个低爆炸半径的真实变更。没有数据证明新缺口前，不继续扩 Agent、扩阶段或建设平台。
 
 ## 不确定性
 
