@@ -19,7 +19,7 @@
 
 ## 3. 何时进入本执行段
 
-`workflow-code-generation` 步骤 1 复杂度路由判定为**中等及以上**（非极轻改动）、且 tasks.md 经用户批准后，即进入本执行段。波内并行度由 `depends_on` 决定：多 task 无依赖 → 并行分波；单 task / 串行依赖 → 逐波单 agent。
+`workflow-code-generation` 步骤 1 复杂度路由判定为**中等及以上**（不满足 Fast-Path 的「请求即计划」判据）、且 tasks.md 经用户批准后，即进入本执行段。波内并行度由 `depends_on` 决定：多 task 无依赖 → 并行分波；单 task / 串行依赖 → 逐波单 agent。
 
 ## 4. 核心流程
 
@@ -86,4 +86,4 @@
 
 ## 8. 与 `workflow-code-generation` 的关系
 
-本规格即 `workflow-code-generation` 步骤 5「下放 agent 执行」的详细设计。`code-generation` 是统一入口 + 复杂度路由：**极轻改动**主会话直改（Fast-Path），**中等及以上**走本执行段（下放 agent，单 task 单 agent / 多 task 并行分波）。两者是**同一个 skill**，共享前置（需求 / 设计 / tasks）与质量基建（review / intent 沉淀）。
+本规格即 `workflow-code-generation` 步骤 5「下放 agent 执行」的详细设计。`code-generation` 是统一入口 + 复杂度路由：符合「请求即计划」的**轻量改动**由主会话直改（Fast-Path），**中等及以上**走本执行段（下放 agent，单 task 单 agent / 多 task 并行分波）。两者是**同一个 skill**，共享质量基建（review / intent 沉淀）；Fast-Path 免 spec / tasks，标准流程须经过完整前置设计门。

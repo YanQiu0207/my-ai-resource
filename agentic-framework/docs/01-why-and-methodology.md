@@ -45,4 +45,4 @@
 
 ## 4. 这套相对 `workflow-*` 改了什么
 
-只改**执行段**：把「逐 task 停等的串行执行」换成「下放 agent 执行（单 agent / 多 task 并行），批准后自主连跑」，并入 `workflow-code-generation` 的复杂度路由（极轻改动仍主会话直改）。前期设计门、质量基建（多维 review、intent 沉淀）**全部保留**。详见 [03-parallel-execution-mode.md](03-parallel-execution-mode.md)。
+只改**执行段**：把「逐 task 停等的串行执行」换成「下放 agent 执行（单 agent / 多 task 并行），批准后自主连跑」，并入 `workflow-code-generation` 的复杂度路由（符合「请求即计划」的轻量改动仍由主会话直改）。前期设计门、质量基建（多维 review、intent 沉淀）**全部保留**。详见 [03-parallel-execution-mode.md](03-parallel-execution-mode.md)。

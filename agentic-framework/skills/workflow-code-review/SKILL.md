@@ -13,8 +13,8 @@ description: 代码评审。按风险档位协调 reviewer subagent 进行并行
 
 | 档位 | 适用 | 调用 reviewer |
 | --- | --- | --- |
-| `lightweight` | 小需求 / 低风险：单模块局部改动（或同一模式的跨文件机械重复改动，如统一改名）、不改公开接口、不碰数据 / 权限 / 并发 / 安全 / 性能关键路径 | `comprehensive-reviewer`（一趟覆盖工程规范 + 需求符合度两维） |
-| `standard` | 默认档：普通功能、Bug 修复、跨 2-3 个模块但风险可控 | `standards-reviewer`、`spec-compliance-reviewer`、`robustness-reviewer` |
+| `lightweight` | 小需求 / 低风险：局部改动，或不改变接口、契约、控制流与模块交互的跨文件机械重复改动；不碰数据 / 权限 / 并发 / 安全 / 性能关键路径 | `comprehensive-reviewer`（一趟覆盖工程规范、需求符合度、正确性与健壮性） |
+| `standard` | 默认档：普通功能、Bug 修复，或涉及多个模块之间的行为、契约、交互变化但风险可控 | `standards-reviewer`、`spec-compliance-reviewer`、`robustness-reviewer` |
 | `strict` | 高风险：生产关键路径、安全 / 权限 / 数据迁移 / 并发 / 分布式 / 性能敏感 / 公共 API / 大范围重构 | 全量 5 reviewer；有 finding 时调用 `review-critic` |
 
 调用方可显式传入 `review_profile: lightweight|standard|strict`。未传入时按范围和风险自行判定；无法判断时用 `standard`，命中高风险任一条件时用 `strict`。
@@ -23,7 +23,7 @@ description: 代码评审。按风险档位协调 reviewer subagent 进行并行
 
 | 角色 | subagent_name | 调用方式 |
 |------|---------------|----------|
-| 轻量综合审查 | `comprehensive-reviewer` | 仅 `lightweight` 调用（一趟覆盖工程规范 + 需求符合度两维） |
+| 轻量综合审查 | `comprehensive-reviewer` | 仅 `lightweight` 调用（一趟覆盖工程规范、需求符合度、正确性与健壮性） |
 | 性能审查 | `performance-reviewer` | `strict` 调用；性能敏感任务在 `standard` 中也可加入 |
 | 健壮性审查 | `robustness-reviewer` | `standard` / `strict` 调用 |
 | 工程规范审查 | `standards-reviewer` | `standard` / `strict` 调用 |
