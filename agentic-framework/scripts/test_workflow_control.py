@@ -1,9 +1,14 @@
 """Tests for deterministic workflow control."""
 
+import errno
+import os
+import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(
     0,
@@ -171,7 +176,14 @@ class WorkflowControlTest(unittest.TestCase):
             self.assertEqual(0, result)
             persisted = path.read_text(encoding="utf-8")
             self.assertIn("- attempts：1", persisted)
-            self.assertEqual([], list(path.parent.glob(".tasks.md.*")))
+            self.assertEqual(
+                [],
+                [
+                    item
+                    for item in path.parent.glob(".tasks.md.*")
+                    if item.name != ".tasks.md.lock"
+                ],
+            )
 
     def test_atomic_write_preserves_permissions_and_crlf(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -186,6 +198,126 @@ class WorkflowControlTest(unittest.TestCase):
             data = path.read_bytes()
             self.assertNotIn(b"\n", data.replace(b"\r\n", b""))
             self.assertEqual(original_mode, path.stat().st_mode & 0o777)
+
+    def test_contending_writer_times_out_without_changing_tasks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "tasks.md"
+            original = tasks_text({1: "进行中"}, {1: []})
+            path.write_text(original, encoding="utf-8")
+            with workflow_control._task_write_lock(path, 0):
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        str(Path(workflow_control.__file__)),
+                        str(path),
+                        "event",
+                        "1",
+                        "failure",
+                        "--write",
+                        "--lock-timeout",
+                        "0.1",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    check=False,
+                    env={**os.environ, "PYTHONUTF8": "1"},
+                )
+            self.assertEqual(2, result.returncode)
+            self.assertIn(str(path.parent / ".tasks.md.lock"), result.stderr)
+            self.assertIn("0.1 秒", result.stderr)
+            self.assertEqual(original, path.read_text(encoding="utf-8"))
+
+    def test_waiting_writer_succeeds_after_lock_release(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "tasks.md"
+            path.write_text(
+                tasks_text({1: "进行中"}, {1: []}), encoding="utf-8"
+            )
+            with workflow_control._task_write_lock(path, 0):
+                helper = (
+                    "import os, sys\n"
+                    f"sys.path.insert(0, {str(Path(workflow_control.__file__).parent)!r})\n"
+                    "import workflow_control\n"
+                    "path = workflow_control.Path(sys.argv[1])\n"
+                    "lock_path = path.parent / f'.{path.name}.lock'\n"
+                    "with lock_path.open('a+b') as stream:\n"
+                    "    stream.seek(0)\n"
+                    "    if workflow_control._try_lock(stream):\n"
+                    "        workflow_control._unlock(stream)\n"
+                    "        raise SystemExit('parent lock was not held')\n"
+                    "print('contended', flush=True)\n"
+                    "raise SystemExit(workflow_control.main([\n"
+                    "    str(path), 'event', '1', 'failure', '--write',\n"
+                    "    '--lock-timeout', '2']))\n"
+                )
+                process = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-c",
+                        helper,
+                        str(path),
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    encoding="utf-8",
+                    env={**os.environ, "PYTHONUTF8": "1"},
+                )
+                self.assertEqual("contended\n", process.stdout.readline())
+                self.assertIsNone(process.poll())
+            _, stderr = process.communicate(timeout=3)
+            self.assertEqual(0, process.returncode, stderr)
+            self.assertIn(
+                "- attempts：1", path.read_text(encoding="utf-8")
+            )
+
+    def test_invalid_lock_timeout_fails_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "tasks.md"
+            original = tasks_text({1: "进行中"}, {1: []})
+            path.write_text(original, encoding="utf-8")
+            for timeout in ("-1", "nan", "inf", "-inf"):
+                with self.subTest(timeout=timeout):
+                    result = workflow_control.main(
+                        [
+                            str(path),
+                            "event",
+                            "1",
+                            "failure",
+                            "--write",
+                            f"--lock-timeout={timeout}",
+                        ]
+                    )
+                    self.assertEqual(2, result)
+                    self.assertEqual(
+                        original, path.read_text(encoding="utf-8")
+                    )
+
+    def test_windows_try_lock_reraises_unexpected_os_error(self) -> None:
+        stream = mock.Mock()
+        locking = mock.Mock(side_effect=OSError(errno.EIO, "I/O error"))
+        fake_msvcrt = types.SimpleNamespace(
+            LK_NBLCK=1, LK_UNLCK=2, locking=locking
+        )
+        with mock.patch.object(workflow_control.os, "name", "nt"), mock.patch.dict(
+            sys.modules, {"msvcrt": fake_msvcrt}
+        ):
+            with self.assertRaisesRegex(OSError, "I/O error"):
+                workflow_control._try_lock(stream)
+
+    def test_windows_try_lock_treats_access_denied_as_contention(self) -> None:
+        stream = mock.Mock()
+        locking = mock.Mock(
+            side_effect=OSError(errno.EACCES, "lock violation")
+        )
+        fake_msvcrt = types.SimpleNamespace(
+            LK_NBLCK=1, LK_UNLCK=2, locking=locking
+        )
+        with mock.patch.object(workflow_control.os, "name", "nt"), mock.patch.dict(
+            sys.modules, {"msvcrt": fake_msvcrt}
+        ):
+            self.assertFalse(workflow_control._try_lock(stream))
 
 
 if __name__ == "__main__":

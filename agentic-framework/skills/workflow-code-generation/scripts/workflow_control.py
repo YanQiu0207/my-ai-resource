@@ -3,16 +3,23 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import errno
 import json
+import math
 import os
 import re
 import stat
 import sys
 import tempfile
+import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import lint_task_deps
+
+
+_LOCK_POLL_INTERVAL_SECONDS = 0.05
 
 
 @dataclass(frozen=True)
@@ -349,6 +356,70 @@ def _atomic_write(path: Path, text: str) -> None:
         raise
 
 
+def _try_lock(stream) -> bool:
+    """Try to acquire an exclusive OS lock without blocking."""
+    stream.seek(0)
+    if os.name == "nt":
+        import msvcrt
+
+        try:
+            msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+        except OSError as error:
+            if error.errno in {errno.EACCES, errno.EAGAIN}:
+                return False
+            raise
+        return True
+
+    import fcntl
+
+    try:
+        fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as error:
+        if error.errno in {errno.EACCES, errno.EAGAIN}:
+            return False
+        raise
+    return True
+
+
+def _unlock(stream) -> None:
+    """Release an exclusive OS lock."""
+    stream.seek(0)
+    if os.name == "nt":
+        import msvcrt
+
+        msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+        return
+
+    import fcntl
+
+    fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+
+@contextlib.contextmanager
+def _task_write_lock(path: Path, timeout: float):
+    """Acquire the task file's cross-process write lock within timeout."""
+    if not math.isfinite(timeout) or timeout < 0:
+        raise ValueError("锁超时必须是大于等于 0 的有限数")
+    lock_path = path.parent / f".{path.name}.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+b") as stream:
+        if stream.tell() == 0:
+            stream.write(b"\0")
+            stream.flush()
+        deadline = time.monotonic() + timeout
+        while not _try_lock(stream):
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(
+                    f"等待写锁 {lock_path} 超时（{timeout:g} 秒）"
+                )
+            time.sleep(min(_LOCK_POLL_INTERVAL_SECONDS, remaining))
+        try:
+            yield
+        finally:
+            _unlock(stream)
+
+
 def _write_decisions(
     path: Path, text: str, decisions: list[TaskDecision]
 ) -> None:
@@ -380,35 +451,56 @@ def main(argv: list[str]) -> int:
     event_parser.add_argument("--max-attempts", type=int, default=2)
     event_parser.add_argument("--reason", default="")
     event_parser.add_argument("--write", action="store_true")
+    event_parser.add_argument("--lock-timeout", type=float, default=10.0)
     block_parser = subparsers.add_parser("block", help="传播下游阻塞")
     block_parser.add_argument("--write", action="store_true")
+    block_parser.add_argument("--lock-timeout", type=float, default=10.0)
     recovery_parser = subparsers.add_parser("recover", help="输出中断恢复计划")
     recovery_parser.add_argument("--merged", nargs="*", type=int, default=[])
 
     args = parser.parse_args(argv)
     try:
-        text, tasks = _load(args.tasks_md)
-        if args.command == "waves":
-            output = build_waves(tasks)
-        elif args.command == "dispatchable":
-            output = dispatchable_tasks(tasks)
-        elif args.command == "event":
-            decision = apply_event(
-                tasks, args.task_id, args.event, args.reason, args.max_attempts
-            )
-            output = asdict(decision)
-            if args.write:
-                _write_decisions(args.tasks_md, text, [decision])
-        elif args.command == "block":
-            decisions = propagate_blocked(tasks)
-            output = [asdict(decision) for decision in decisions]
-            if args.write:
-                _write_decisions(args.tasks_md, text, decisions)
+        is_write = args.command in {"event", "block"} and args.write
+        if is_write:
+            with _task_write_lock(args.tasks_md, args.lock_timeout):
+                text, tasks = _load(args.tasks_md)
+                if args.command == "event":
+                    decision = apply_event(
+                        tasks,
+                        args.task_id,
+                        args.event,
+                        args.reason,
+                        args.max_attempts,
+                    )
+                    output = asdict(decision)
+                    _write_decisions(args.tasks_md, text, [decision])
+                else:
+                    decisions = propagate_blocked(tasks)
+                    output = [asdict(decision) for decision in decisions]
+                    _write_decisions(args.tasks_md, text, decisions)
         else:
-            output = [
-                asdict(action)
-                for action in plan_recovery(tasks, set(args.merged))
-            ]
+            text, tasks = _load(args.tasks_md)
+            if args.command == "waves":
+                output = build_waves(tasks)
+            elif args.command == "dispatchable":
+                output = dispatchable_tasks(tasks)
+            elif args.command == "event":
+                decision = apply_event(
+                    tasks,
+                    args.task_id,
+                    args.event,
+                    args.reason,
+                    args.max_attempts,
+                )
+                output = asdict(decision)
+            elif args.command == "block":
+                decisions = propagate_blocked(tasks)
+                output = [asdict(decision) for decision in decisions]
+            else:
+                output = [
+                    asdict(action)
+                    for action in plan_recovery(tasks, set(args.merged))
+                ]
     except (OSError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
