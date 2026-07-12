@@ -40,8 +40,10 @@ from __future__ import annotations
 import argparse
 import bisect
 import json
+import os
 import re
 import sys
+import tempfile
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -125,6 +127,8 @@ def read_claude(path: Path) -> tuple[list[dict], list[dict], str | None]:
                 continue
             cwd = cwd or obj.get("cwd")
             msg = obj.get("message") or {}
+            if not isinstance(msg, dict):
+                continue
             entry = make_entry(ts)
             if obj["type"] == "assistant":
                 entry["usage"] = normalize_claude_usage(msg.get("usage"))
@@ -195,6 +199,8 @@ def read_claude_subagents(session_path: Path) -> list[dict]:
                 if obj.get("type") != "assistant":
                     continue
                 msg = obj.get("message") or {}
+                if not isinstance(msg, dict):
+                    continue
                 usage = normalize_claude_usage(msg.get("usage"))
                 if usage:
                     tokens.update(usage)
@@ -233,6 +239,8 @@ def read_codex(path: Path) -> tuple[list[dict], list[dict], str | None]:
                 model = payload.get("model") or model
             elif kind == ("event_msg", "token_count"):
                 info = payload.get("info") or {}
+                if not isinstance(info, dict):
+                    continue
                 total = normalize_codex_usage(info.get("total_token_usage"))
                 if total is not None:
                     delta = {k: max(0, total[k] - prev_total[k]) for k in TOKEN_KEYS}
@@ -528,7 +536,9 @@ def append_history(results: list[dict], history_path: Path) -> tuple[int, int]:
                 except json.JSONDecodeError:
                     raw_kept.append(line)
                     continue
-                if isinstance(old, dict):
+                if (isinstance(old, dict)
+                        and old.get("source") is not None
+                        and old.get("session") is not None):
                     entries[(old.get("source"), old.get("session"))] = line
                 else:
                     raw_kept.append(line)
@@ -544,9 +554,21 @@ def append_history(results: list[dict], history_path: Path) -> tuple[int, int]:
             continue
         entries[key] = line
     if added or updated:
-        history_path.write_text(
-            "".join(x + "\n" for x in raw_kept + list(entries.values())),
-            encoding="utf-8")
+        content = "".join(x + "\n" for x in raw_kept + list(entries.values()))
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                    "w", encoding="utf-8", dir=history_path.parent,
+                    prefix=f".{history_path.name}.", suffix=".tmp",
+                    delete=False) as temp_file:
+                temp_file.write(content)
+                temp_file.flush()
+                os.fsync(temp_file.fileno())
+                temp_path = Path(temp_file.name)
+            os.replace(temp_path, history_path)
+        finally:
+            if temp_path is not None and temp_path.exists():
+                temp_path.unlink()
     return added, updated
 
 

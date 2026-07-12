@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import analyze_session_metrics as asm
@@ -139,6 +140,31 @@ class ReaderRobustnessTest(unittest.TestCase):
             _, _, cwd = asm.read_codex(path)
         self.assertEqual("E:/work/x", cwd)
 
+    def test_read_claude_skips_non_dict_message(self) -> None:
+        malformed = {"type": "assistant", "timestamp": "2026-07-12T00:00:00Z",
+                     "message": "bad"}
+        valid = {"type": "assistant", "timestamp": "2026-07-12T00:00:01Z",
+                 "message": {"content": []}}
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "s.jsonl"
+            path.write_text("\n".join(map(json.dumps, (malformed, valid))) + "\n",
+                            encoding="utf-8")
+            entries, _, _ = asm.read_claude(path)
+        self.assertEqual(1, len(entries))
+
+    def test_read_codex_skips_non_dict_token_info(self) -> None:
+        malformed = {"type": "event_msg", "timestamp": "2026-07-12T00:00:00Z",
+                     "payload": {"type": "token_count", "info": "bad"}}
+        valid = {"type": "session_meta", "timestamp": "2026-07-12T00:00:01Z",
+                 "payload": {"cwd": "E:/work/x"}}
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "rollout-1.jsonl"
+            path.write_text("\n".join(map(json.dumps, (malformed, valid))) + "\n",
+                            encoding="utf-8")
+            entries, _, cwd = asm.read_codex(path)
+        self.assertEqual([], entries)
+        self.assertEqual("E:/work/x", cwd)
+
 
 class AppendHistoryTest(unittest.TestCase):
     """账本 upsert：新增追加、已有覆盖、坏行保留。"""
@@ -168,6 +194,29 @@ class AppendHistoryTest(unittest.TestCase):
         self.assertIn("not-json", lines)
         self.assertIn("[1, 2]", lines)
         self.assertEqual(3, len(lines))
+
+    def test_objects_without_identity_are_preserved(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            ledger = Path(td) / "history.jsonl"
+            ledger.write_text('{"x": 1}\n{"y": 2}\n', encoding="utf-8")
+            asm.append_history(
+                [{"source": "claude", "session": "s1", "entries": 1}], ledger)
+            lines = ledger.read_text(encoding="utf-8").splitlines()
+        self.assertIn('{"x": 1}', lines)
+        self.assertIn('{"y": 2}', lines)
+        self.assertEqual(3, len(lines))
+
+    def test_replace_failure_preserves_existing_ledger(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            ledger = Path(td) / "history.jsonl"
+            original = '{"source":"claude","session":"s1"}\n'
+            ledger.write_text(original, encoding="utf-8")
+            with mock.patch.object(asm.os, "replace", side_effect=OSError("failed")):
+                with self.assertRaises(OSError):
+                    asm.append_history(
+                        [{"source": "claude", "session": "s2"}], ledger)
+            self.assertEqual(original, ledger.read_text(encoding="utf-8"))
+            self.assertEqual([ledger], list(Path(td).iterdir()))
 
 
 if __name__ == "__main__":
