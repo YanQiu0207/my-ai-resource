@@ -68,7 +68,6 @@ def parse_tasks(text: str) -> dict[int, dict]:
 
         files = {p.strip() for p in BACKTICK.findall(field(body, "文件"))}
         deps, has_dep_field = parse_deps(body)
-        deps.discard(tid)
         tasks[tid] = {
             "files": files,
             "deps": deps,

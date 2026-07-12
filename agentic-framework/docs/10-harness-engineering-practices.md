@@ -103,7 +103,7 @@ Profile 必须表达门禁集合和风险策略，不能只是两份重复 Promp
 
 **状态**：已吸收。
 
-**问题**：当前 owner 可以「实现 + 自审 + 自修」，同模型家族自审存在共同盲区；框架自己的批判性评估也将其列为待办（[`07-critical-review.md`](07-critical-review.md)，第 23、43 行）。
+**原问题**：owner 可以「实现 + 自审 + 自修」，同模型家族自审存在共同盲区；框架自己的批判性评估也将其列为待办（[`07-critical-review.md`](07-critical-review.md)，第 23、43 行）。
 
 **最小吸收方式**：
 
@@ -112,6 +112,8 @@ Profile 必须表达门禁集合和风险策略，不能只是两份重复 Promp
 - Fast-Path 和轻量档不扩大 Agent 数量。
 
 **成功标准**：严格档执行记录能证明 implementer、reviewer、judge 不是同一执行主体。
+
+**落地结果**：`strict` 档已将 Review 和最终裁决上提给主 Agent 或独立 Judge Agent；owner 只负责实现、测试、机器验证和修复 keep finding（[`workflow-code-generation/SKILL.md`](../skills/workflow-code-generation/SKILL.md)，第 112 行；[`workflow-code-review/SKILL.md`](../skills/workflow-code-review/SKILL.md)，第 12 行）。
 
 #### P0：增加轻量运行指标，而不是建设监控平台
 
@@ -132,6 +134,8 @@ Profile 必须表达门禁集合和风险策略，不能只是两份重复 Promp
 
 #### P1：用 Mock 和固定 case 测控制流
 
+**状态**：已吸收。
+
 **问题**：Tier 0/1 已验证结构和触发，但「并行与串行效果」「Workflow 是否在失败时正确回退」尚未实测（[`07-critical-review.md`](07-critical-review.md)，第 27～28、46～47 行）。
 
 **最小吸收方式**：
@@ -142,6 +146,8 @@ Profile 必须表达门禁集合和风险策略，不能只是两份重复 Promp
 - 稳定后再选择 1～2 个真实任务做 Tier 2 改前/改后 A/B，不直接进入 Tier 3 自进化。
 
 **成功标准**：无需调用真实模型即可重复验证关键状态转换；同一输入多次运行得到相同流程结果。
+
+**落地结果**：新增确定性 Python 控制流内核和固定 case，覆盖依赖分波、单任务失败隔离、下游阻塞、修复次数耗尽和会话中断恢复；实际编排入口统一调用该内核，并将重试次数与控制阶段持久化到 `tasks.md`。设计、Review 修复记录和验证证据见 [`deterministic-control-flow/spec.md`](design-docs/workflow-code-generation/deterministic-control-flow/spec.md) 与 [`tasks.md`](design-docs/workflow-code-generation/deterministic-control-flow/tasks.md)。
 
 ### 生产 Profile 候选能力
 
@@ -168,13 +174,13 @@ Profile 必须表达门禁集合和风险策略，不能只是两份重复 Promp
 
 ## 推荐落地顺序
 
-1. **先做独立评审边界**：它直接修补高风险任务质量盲区，不引入新平台。
-2. **再记录轻量指标**：先获得真实成本和失败数据，再决定预算策略。
-3. **补控制流测试**：用 Mock 验证失败、重试、阻塞和恢复，证明 Harness 自身可靠。
-4. **定义 Profile 契约**：明确共享内核、`rapid` 与 `production` 的门禁差异，但先不复制 Skill。
-5. **选择一个生产试点**：用真实变更验证发布审批、回滚、生产验证和线上反馈闭环。
+已完成：**独立评审边界**和**确定性控制流测试**。
 
-明确停止点：前 3 项完成后先运行 10 个真实任务；生产 Profile 先跑 1 个低爆炸半径的真实变更。没有数据证明新缺口前，不继续扩 Agent、扩阶段或建设平台。
+1. **记录轻量指标**：先获得真实成本和失败数据，再决定预算策略。
+2. **定义 Profile 契约**：明确共享内核、`rapid` 与 `production` 的门禁差异，但先不复制 Skill。
+3. **选择一个生产试点**：用真实变更验证发布审批、回滚、生产验证和线上反馈闭环。
+
+明确停止点：轻量指标和控制流测试完成后，先运行 10 个真实任务；生产 Profile 先跑 1 个低爆炸半径的真实变更。没有数据证明新缺口前，不继续扩 Agent、扩阶段或建设平台。
 
 ## 不确定性
 
