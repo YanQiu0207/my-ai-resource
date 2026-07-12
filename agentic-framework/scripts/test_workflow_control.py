@@ -319,6 +319,154 @@ class WorkflowControlTest(unittest.TestCase):
         ):
             self.assertFalse(workflow_control._try_lock(stream))
 
+    def test_reason_with_backslashes_does_not_corrupt_state_line(self) -> None:
+        for reason in (r"C:\1foo", r"\g<0>", r"\1\2"):
+            with self.subTest(reason=reason):
+                text = tasks_text(
+                    {1: "进行中"}, {1: []}, attempts=2
+                )
+                tasks = lint_task_deps.parse_tasks(text)
+                decision = workflow_control.apply_event(
+                    tasks, 1, "failure", reason
+                )
+                updated = workflow_control.update_task_state(text, decision)
+                self.assertIn(f"- 状态：需人工（{reason}）", updated)
+                reparsed = lint_task_deps.parse_tasks(updated)
+                self.assertEqual(
+                    "需人工",
+                    workflow_control._states(reparsed)[1],
+                )
+
+    def test_manual_event_requires_reason(self) -> None:
+        tasks = lint_task_deps.parse_tasks(tasks_text({1: "进行中"}, {1: []}))
+        with self.assertRaisesRegex(ValueError, "原因"):
+            workflow_control.apply_event(tasks, 1, "manual", "")
+
+    def test_manual_event_moves_to_manual_without_consuming_attempts(
+        self,
+    ) -> None:
+        tasks = lint_task_deps.parse_tasks(
+            tasks_text({1: "进行中"}, {1: []}, attempts=1)
+        )
+        decision = workflow_control.apply_event(
+            tasks, 1, "manual", "verify 门禁自身出错"
+        )
+        self.assertEqual("需人工", decision.state)
+        self.assertEqual("manual", decision.control_stage)
+        self.assertEqual(1, decision.attempts)
+
+    def test_manual_resolved_event_completes_manual_task(self) -> None:
+        text = tasks_text({1: "需人工"}, {1: []})
+        text = text.replace(
+            "- attempts：0", "- attempts：0\n- control_stage：manual"
+        )
+        tasks = lint_task_deps.parse_tasks(text)
+        decision = workflow_control.apply_event(
+            tasks, 1, "manual_resolved", "已人工修复并合并"
+        )
+        self.assertEqual("完成", decision.state)
+        self.assertEqual("completed", decision.control_stage)
+
+    def test_plan_recovery_manual_and_merged_completes(self) -> None:
+        tasks = lint_task_deps.parse_tasks(tasks_text({1: "需人工"}, {1: []}))
+        actions = workflow_control.plan_recovery(tasks, {1})
+        self.assertEqual(
+            ("complete", "任务已人工解决并合并"),
+            (actions[0].action, actions[0].reason),
+        )
+
+    def test_plan_recovery_manual_and_unmerged_returns_manual_action(
+        self,
+    ) -> None:
+        tasks = lint_task_deps.parse_tasks(tasks_text({1: "需人工"}, {1: []}))
+        actions = workflow_control.plan_recovery(tasks, set())
+        self.assertEqual(
+            ("manual", "等待人工处理，处理并合并后重跑 recover"),
+            (actions[0].action, actions[0].reason),
+        )
+
+    def test_plan_recovery_rejects_contradicting_merge_facts(self) -> None:
+        pending = lint_task_deps.parse_tasks(
+            tasks_text({1: "未开始"}, {1: []})
+        )
+        with self.assertRaisesRegex(ValueError, "矛盾"):
+            workflow_control.plan_recovery(pending, {1})
+        blocked = lint_task_deps.parse_tasks(tasks_text({1: "阻塞"}, {1: []}))
+        with self.assertRaisesRegex(ValueError, "矛盾"):
+            workflow_control.plan_recovery(blocked, {1})
+
+    def test_dispatchable_and_recovery_fail_closed_on_cycle(self) -> None:
+        cyclic = lint_task_deps.parse_tasks(
+            tasks_text({1: "未开始", 2: "未开始"}, {1: [2], 2: [1]})
+        )
+        with self.assertRaisesRegex(ValueError, "循环"):
+            workflow_control.dispatchable_tasks(cyclic)
+        with self.assertRaisesRegex(ValueError, "循环"):
+            workflow_control.plan_recovery(cyclic, set())
+
+    def test_missing_status_field_fails_closed(self) -> None:
+        text = "### 任务 1：测试\n- depends_on：[]\n"
+        tasks = lint_task_deps.parse_tasks(text)
+        with self.assertRaisesRegex(ValueError, "缺少合法状态"):
+            workflow_control._states(tasks)
+
+    def test_build_waves_scales_to_hundred_tasks(self) -> None:
+        states = {task_id: "未开始" for task_id in range(1, 101)}
+        dependencies = {1: []}
+        for task_id in range(2, 101):
+            dependencies[task_id] = [task_id - 1]
+        tasks = lint_task_deps.parse_tasks(tasks_text(states, dependencies))
+        waves = workflow_control.build_waves(tasks)
+        self.assertEqual([[task_id] for task_id in range(1, 101)], waves)
+
+    def test_update_task_state_preserves_existing_indentation(self) -> None:
+        text = (
+            "### 任务 1：测试\n\n"
+            "  - 状态：进行中\n"
+            "  - attempts：2\n"
+            "  - depends_on：[]\n"
+        )
+        tasks = lint_task_deps.parse_tasks(text)
+        decision = workflow_control.apply_event(tasks, 1, "failure")
+        updated = workflow_control.update_task_state(text, decision)
+        self.assertIn("  - 状态：需人工", updated)
+        self.assertIn("  - attempts：3", updated)
+
+    def test_update_task_state_preserves_existing_control_stage_indentation(
+        self,
+    ) -> None:
+        text = (
+            "### 任务 1：测试\n\n"
+            "  - 状态：进行中\n"
+            "  - attempts：2\n"
+            "  - control_stage：running\n"
+            "  - depends_on：[]\n"
+        )
+        tasks = lint_task_deps.parse_tasks(text)
+        decision = workflow_control.apply_event(tasks, 1, "quality_passed")
+        updated = workflow_control.update_task_state(text, decision)
+        self.assertIn("  - control_stage：quality_passed", updated)
+
+    def test_load_strips_bom_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "tasks.md"
+            path.write_bytes(
+                tasks_text({1: "未开始"}, {1: []}).encode("utf-8-sig")
+            )
+            text, tasks = workflow_control._load(path)
+            self.assertFalse(text.startswith("﻿"))
+            self.assertIn(1, tasks)
+
+    def test_attempts_rejects_non_decimal_digit_characters(self) -> None:
+        text = tasks_text({1: "进行中"}, {1: []}).replace(
+            "- attempts：0", "- attempts：¹"
+        )
+        tasks = lint_task_deps.parse_tasks(text)
+        self.assertTrue("¹".isdigit())
+        self.assertFalse("¹".isdecimal())
+        with self.assertRaisesRegex(ValueError, "非法 attempts"):
+            workflow_control._attempts(tasks[1])
+
 
 if __name__ == "__main__":
     unittest.main()
