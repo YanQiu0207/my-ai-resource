@@ -42,6 +42,7 @@ python scripts/install_agentic_framework.py . --dry-run
 ```
 
 - 覆盖语义：同名文件按框架版本覆盖，目标侧无关文件保留；如在 `.claude/skills` 下有同名本地定制，先备份。
+- **同步前确认源分支**：`--source` 默认取脚本所在工作树的实时内容（含未提交改动）。多 agent 并行时主工作树可能不在 main——同步前先 `git branch --show-current` 与 `git status --short` 确认在干净的 main；不满足时用临时 worktree 检出 main 并显式传 `--source <worktree>/agentic-framework`（2026-07 踩坑：曾把功能分支的未提交 WIP 泄漏进全局副本）。
 - Claude：`.claude/skills/<name>/SKILL.md` 由 Claude Code 自动发现，无需再在 CLAUDE.md 写路径。
 - Codex：`.codex/skills/<name>/SKILL.md`、`.codex/agents/` 与 `.codex/commands/` 随脚本拷出；`AGENTS.md` 只保留项目级约定。
 
