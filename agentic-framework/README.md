@@ -254,3 +254,4 @@ python scripts/analyze_session_metrics.py --project-dir <claude项目目录> --h
 | [001-machine-verification-gate.md](docs/adr/001-machine-verification-gate.md) | 将机器验证设为与 LLM Code Review 并列的合并前硬门 |
 | [002-retain-and-widen-fastpath.md](docs/adr/002-retain-and-widen-fastpath.md) | 保留 Fast-Path 并扩大适用范围（否决「统一 agent 执行」），主判据「请求即计划」 |
 | [003-review-fix-loop-convergence.md](docs/adr/003-review-fix-loop-convergence.md) | review 修复循环收敛：仅 NEEDS_CHANGES 触发 + 增量复审 + 2 轮上限 |
+| [004-lighten-default-workflow.md](docs/adr/004-lighten-default-workflow.md) | 单 task 去重 Review、Standard 综合审查、Quick Design 合并批准与清晰需求直达路由 |
