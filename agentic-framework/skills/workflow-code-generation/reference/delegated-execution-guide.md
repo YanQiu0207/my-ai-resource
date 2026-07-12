@@ -99,6 +99,8 @@ Workflow 完成后，主会话拿到 `results` 数组。所有 task 先通过 `e
 
 > 🗂 **`tasks.md` 是进度真相源**：每个 task 的 `状态:` 字段实时写回（`未开始` / `进行中` / `完成` / `需人工` / `阻塞`）——dispatch 标 `进行中`，合并成功标 `完成`，失败 / 冲突标 `需人工`（附原因 + 失败输出），上游未合并的下游标 `阻塞`。每步完成即更新，中断后靠它续跑。
 
+所有状态写入必须通过 `workflow_control.py ... --write` 完成。脚本使用同目录的 `.<tasks.md 文件名>.lock` 排他锁，并在锁内重新读取、决策和原子写回；多个会话可以等待同一写锁，但不能并行合并状态。默认等待 10 秒，可在 `event` 或 `block` 后传 `--lock-timeout <秒数>` 调整；超时退出时不会修改 `tasks.md`。`waves`、`dispatchable` 和 `recover` 为只读命令，不获取排他锁。锁文件长期存在不代表锁仍被占用，不要手工删除正在使用的锁文件。
+
 对每个 wave：
 
 1. **dispatch**：波内每个 task 派一个子 agent（A 为 owner、B 为 implementer），各自在隔离 git worktree（基于当前分支 HEAD）工作，受并发上限约束、超出排队。多个子 agent **在同一条消息里并行派发**。
