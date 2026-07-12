@@ -41,6 +41,66 @@ class ExtractReviewsTest(unittest.TestCase):
         self.assertIsNone(r["round"])
 
 
+class ExtractTaskAttributionsTest(unittest.TestCase):
+    """固定任务归因区块的解析、兼容与去重。"""
+
+    BLOCK = """## 任务归因
+- **Feature**: session-telemetry/task-attribution
+- **Task**: Task 2
+- **Review Profile**: standard
+- **Review Retries**: 1
+- **Verify Retries**: 2
+- **Manual Intervention**: review，verify
+"""
+
+    def test_extracts_complete_attribution(self) -> None:
+        (attribution,) = asm.extract_task_attributions(self.BLOCK)
+        self.assertEqual("session-telemetry/task-attribution",
+                         attribution["feature"])
+        self.assertEqual("Task 2", attribution["task"])
+        self.assertEqual(1, attribution["review_retries"])
+        self.assertEqual(2, attribution["verify_retries"])
+        self.assertEqual(["review", "verify"],
+                         attribution["manual_intervention"])
+
+    def test_legacy_text_has_no_attribution(self) -> None:
+        self.assertEqual([], asm.extract_task_attributions(
+            "# Code Review 报告\n## 总体结论: PASS\n"))
+
+    def test_incomplete_or_invalid_block_is_ignored(self) -> None:
+        self.assertEqual([], asm.extract_task_attributions(
+            self.BLOCK.replace("- **Task**: Task 2\n", "")))
+        self.assertEqual([], asm.extract_task_attributions(
+            self.BLOCK.replace("- **Review Retries**: 1",
+                               "- **Review Retries**: unknown")))
+
+    def test_fields_are_not_combined_across_sections(self) -> None:
+        split_block = self.BLOCK.replace(
+            "- **Review Retries**: 1",
+            "## 验证结果\n- **Review Retries**: 1")
+        self.assertEqual([], asm.extract_task_attributions(split_block))
+
+    def test_analyze_session_keeps_last_duplicate(self) -> None:
+        first = self.BLOCK.replace("- **Verify Retries**: 2",
+                                   "- **Verify Retries**: 0")
+        entries = [
+            {"type": "response_item", "timestamp": "2026-07-12T00:00:00Z",
+             "payload": {"type": "message", "role": "assistant",
+                         "content": [{"type": "output_text", "text": first}]}},
+            {"type": "response_item", "timestamp": "2026-07-12T00:00:01Z",
+             "payload": {"type": "message", "role": "assistant",
+                         "content": [{"type": "output_text", "text": self.BLOCK}]}},
+        ]
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "rollout-test.jsonl"
+            path.write_text("\n".join(map(json.dumps, entries)) + "\n",
+                            encoding="utf-8")
+            result = asm.analyze_session(path, 300)
+        self.assertEqual(1, len(result["task_attributions"]))
+        self.assertEqual(2,
+                         result["task_attributions"][0]["verify_retries"])
+
+
 class SummarizeQualityTest(unittest.TestCase):
     """按流重建修复循环与 ADR 003 指标计数。"""
 

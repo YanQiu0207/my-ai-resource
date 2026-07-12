@@ -60,6 +60,12 @@ REVIEW_VERDICT_RE = re.compile(r"总体结论[:：]?\s*\**\s*(PASS|NEEDS_CHANGES
 # 轮次是 2026-07 加入模板的字段；括号与「新增」标记放宽半角变体
 REVIEW_ROUND_RE = re.compile(r"轮次\**\s*[:：]\s*\**\s*(?:首审|复审第\s*(\d+)\s*轮)")
 REVIEW_P_RE = re.compile(r"^#{3,4}\s*P([012])-\d+\s*([（(]\s*新增\s*[）)])?", re.MULTILINE)
+ATTRIBUTION_HEAD_RE = re.compile(r"^\s{0,3}##\s*任务归因\s*$", re.MULTILINE)
+MARKDOWN_H2_RE = re.compile(r"^\s{0,3}##(?!#)\s+.*$", re.MULTILINE)
+ATTRIBUTION_FIELD_RE = re.compile(
+    r"^-\s*\*\*(Feature|Task|Review Profile|Review Retries|Verify Retries|"
+    r"Manual Intervention)\*\*\s*[:：]\s*(.*?)\s*$",
+    re.MULTILINE)
 UNMARKED = "(未标记)"
 TOKEN_KEYS = ("input", "output", "cache_read", "cache_write")
 
@@ -81,7 +87,8 @@ def entry_ts(obj: dict) -> float | None:
 
 def make_entry(ts: float, usage=None, model=None, anchors=None, tools=None) -> dict:
     return {"ts": ts, "usage": usage, "model": model,
-            "anchors": anchors or [], "tools": tools or [], "reviews": []}
+            "anchors": anchors or [], "tools": tools or [], "reviews": [],
+            "task_attributions": []}
 
 
 def extract_reviews(text: str, ts: float) -> list[dict]:
@@ -106,6 +113,48 @@ def extract_reviews(text: str, ts: float) -> list[dict]:
                         "new_p0": new_counts["0"], "new_p1": new_counts["1"],
                         "new_p2": new_counts["2"]})
     return reviews
+
+
+def extract_task_attributions(text: str) -> list[dict]:
+    """按固定「任务归因」区块提取任务级遥测字段。"""
+    attributions = []
+    heads = list(ATTRIBUTION_HEAD_RE.finditer(text))
+    field_names = {
+        "Feature": "feature",
+        "Task": "task",
+        "Review Profile": "review_profile",
+        "Review Retries": "review_retries",
+        "Verify Retries": "verify_retries",
+        "Manual Intervention": "manual_intervention",
+    }
+    required = set(field_names.values())
+    for head in heads:
+        next_section = MARKDOWN_H2_RE.search(text, head.end())
+        end = next_section.start() if next_section else len(text)
+        segment = text[head.end():end]
+        fields = {
+            field_names[name]: value.strip()
+            for name, value in ATTRIBUTION_FIELD_RE.findall(segment)
+        }
+        if set(fields) != required:
+            continue
+        try:
+            fields["review_retries"] = int(fields["review_retries"])
+            fields["verify_retries"] = int(fields["verify_retries"])
+        except ValueError:
+            continue
+        if (fields["review_profile"] not in
+                ("lightweight", "standard", "strict")
+                or fields["review_retries"] < 0
+                or fields["verify_retries"] < 0):
+            continue
+        manual = fields["manual_intervention"]
+        fields["manual_intervention"] = ([] if manual in ("无", "[]") else
+                                           [item.strip() for item in
+                                            re.split(r"[,，]", manual)
+                                            if item.strip()])
+        attributions.append(fields)
+    return attributions
 
 
 # ---------- Claude Code 数据源 ----------
@@ -140,6 +189,8 @@ def read_claude(path: Path) -> tuple[list[dict], list[dict], str | None]:
                         text = block.get("text", "")
                         entry["anchors"].extend(MARKER_RE.findall(text))
                         entry["reviews"].extend(extract_reviews(text, entry["ts"]))
+                        entry["task_attributions"].extend(
+                            extract_task_attributions(text))
                     elif block.get("type") == "tool_use":
                         entry["tools"].append(block.get("name", "?"))
                         if block.get("name") == "Skill":
@@ -183,7 +234,7 @@ def read_claude_subagents(session_path: Path) -> list[dict]:
         first = None
         tokens = Counter()
         model_tokens: dict[str, Counter] = defaultdict(Counter)
-        reviews = []
+        reviews, task_attributions = [], []
         with open(jsonl, encoding="utf-8") as f:
             for line in f:
                 try:
@@ -207,10 +258,15 @@ def read_claude_subagents(session_path: Path) -> list[dict]:
                     model_tokens[msg.get("model") or "(unknown)"].update(usage)
                 for block in msg.get("content") or []:
                     if isinstance(block, dict) and block.get("type") == "text":
-                        reviews.extend(extract_reviews(block.get("text", ""), ts))
+                        text = block.get("text", "")
+                        reviews.extend(extract_reviews(text, ts))
+                        task_attributions.extend(
+                            (ts, attribution) for attribution in
+                            extract_task_attributions(text))
         if first is not None:
             agents.append({"agent_type": agent_type, "first": first, "tokens": tokens,
                            "model_tokens": model_tokens, "reviews": reviews})
+            agents[-1]["task_attributions"] = task_attributions
     return agents
 
 
@@ -255,6 +311,8 @@ def read_codex(path: Path) -> tuple[list[dict], list[dict], str | None]:
                     if payload.get("role") == "assistant":
                         entry["anchors"].extend(MARKER_RE.findall(text))
                         entry["reviews"].extend(extract_reviews(text, ts))
+                        entry["task_attributions"].extend(
+                            extract_task_attributions(text))
                 elif kind[1] in ("function_call", "custom_tool_call"):
                     entry["tools"].append(payload.get("name", kind[1]))
                 elif kind[1] == "local_shell_call":
@@ -354,6 +412,7 @@ def analyze_session(path: Path, idle_gap: float) -> dict:
     timeline: list[tuple[float, str]] = []
     model_tokens: dict[str, Counter] = defaultdict(Counter)
     reviews: list[dict] = []
+    attribution_events: list[tuple[float, dict]] = []
     current = UNMARKED
     prev_ts: float | None = None
     idle_seconds = 0.0
@@ -374,6 +433,8 @@ def analyze_session(path: Path, idle_gap: float) -> dict:
             bucket["tools"][t] += 1
         for r in e["reviews"]:
             reviews.append({**r, "phase": current, "stream": "main"})
+        for attribution in e["task_attributions"]:
+            attribution_events.append((e["ts"], attribution))
         if e["usage"] is not None:
             bucket["requests"] += 1
             bucket["tokens"].update(e["usage"])
@@ -392,6 +453,14 @@ def analyze_session(path: Path, idle_gap: float) -> dict:
         for r in agent["reviews"]:
             reviews.append({**r, "phase": phase, "agent": agent["agent_type"],
                             "stream": f"sub-{i}"})
+        for ts, attribution in agent.get("task_attributions", []):
+            attribution_events.append((ts, attribution))
+
+    task_attributions: dict[tuple[str, str], dict] = {}
+    for _, attribution in sorted(attribution_events, key=lambda event: event[0]):
+        key = (attribution["feature"], attribution["task"])
+        task_attributions.pop(key, None)
+        task_attributions[key] = attribution
 
     def iso(ts: float) -> str:
         return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
@@ -409,6 +478,7 @@ def analyze_session(path: Path, idle_gap: float) -> dict:
         "subagent_types": dict(agent_types),
         "model_tokens": {m: dict(c) for m, c in model_tokens.items()},
         "reviews": reviews,
+        "task_attributions": list(task_attributions.values()),
         "quality": summarize_quality(reviews),
         "phases": {
             name: {
