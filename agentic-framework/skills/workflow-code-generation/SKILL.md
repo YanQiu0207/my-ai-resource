@@ -108,7 +108,7 @@ tasks.md 经用户批准后，执行下放给 agent：**主会话只编排，不
 
 无法判断风险时选 `standard`；命中高风险任一条件时选 `strict`。各档位对应的 reviewer 集由 `workflow-code-review` 定义（本 skill 只判档，不重列）。review 档位写入 task context，owner / implementer 必须按档位调用 `workflow-code-review`。
 
-**主会话必须通过控制流内核构建波次（wave）数组**：先运行 `python <本 skill 目录>/scripts/workflow_control.py <tasks.md 路径> waves`，将输出的波次数组作为 `args.waves` 传入 Workflow 工具。每波 dispatch 前运行同一脚本的 `dispatchable`，只执行输出的 task。缺 `depends_on` 时先由 `lint_task_deps.py` 报错，修复前禁止全并行。**禁止另写一套手工分波或状态判断。**
+**主会话必须通过控制流内核构建波次（wave）数组**：先运行 `python <本 skill 目录>/scripts/workflow_control.py <tasks.md 路径> waves` 得到任务 ID 分层数组，按 [reference/delegated-execution-guide.md](reference/delegated-execution-guide.md) 将当前一波的每个任务 ID 富化为 task 对象（从 `tasks.md` 取 `title`、`context_files`、`verification`、`artifacts`、`review_profile`）后再传入 Workflow 工具的 `args.waves`。每波 dispatch 前运行同一脚本的 `dispatchable`，只执行输出的 task。缺 `depends_on` 时先由 `lint_task_deps.py` 报错，修复前禁止全并行。**禁止另写一套手工分波或状态判断**。
 
 **先判定 CLI 嵌套能力**（派子 agent 试再派孙 agent；判定细则与 5 层上限见 reference 手册），选编排模式：
 - **模式 A（默认，Claude Code 支持嵌套）**：每 task 派 owner 子 agent 执行实现、测试和机器验证。`lightweight` / `standard` 由 owner 自跑 review；`strict` 由主 agent 或独立 Judge Agent 调用 `workflow-code-review` 并裁决，owner 只接收 keep finding 并修复。
