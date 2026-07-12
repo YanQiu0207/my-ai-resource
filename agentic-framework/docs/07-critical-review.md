@@ -40,12 +40,12 @@
 | 补通用客观门禁（机器能验的不靠 LLM 背书） | ✅ 已做（`workflow-verification`） |
 | skill-graph lint（防接线断点） | ✅ 已做（`lint_skill_graph.py`） |
 | spec drift 门禁（改代码但不改规格时必须写明原因） | ✅ 已做（`workflow-verification` 内置检查） |
-| 高风险 task 的 review 从 owner 剥离，恢复对抗性 | ⏳ 待做 |
-| 执行段加 token 预算旋钮 + spend 留痕 | ⏳ 待做 |
+| 高风险 task 的 review 从 owner 剥离，恢复对抗性 | ✅ 已做（`strict` 上提给主 Agent 或独立 Judge） |
+| 执行段加 token 预算旋钮 + spend 留痕 | 🟡 已有离线会话遥测，运行时预算闸仍待做 |
 | tasks.md 依赖校验（按改动文件重叠自动提示缺失 `depends_on`） | ✅ 已做（`lint_task_deps.py`） |
-| 评测体系分层落地（结构门卫 / 触发 / 效果 / 自进化） | 🟡 基建已立（`08-evaluation-strategy.md`，Tier 0/1 已接） |
+| 评测体系分层落地（结构门卫 / 触发 / 效果 / 自进化） | 🟡 Tier 0 有 Runner；Tier 1 只有 case 资产，自动执行器待做 |
 | 用 `skill-evolver` 实测并行 vs 串行缺陷率 | ⏳ 待做（前置评测集起步中） |
 
 ## 总评
 
-**架构判断力一流，质量基建曾偏科。** 审查维度做到了业界顶配，机器验证这条腿在补上 `workflow-verification` 后才算名副其实。剩余短板（自审独立性、token 预算、有效性实测）不影响当前定位，属持续打磨项。
+**架构判断力一流，质量基建曾偏科。** 审查维度做到了业界顶配，机器验证这条腿在补上 `workflow-verification` 后才算名副其实。严格档的独立审查边界已经补齐；剩余短板是运行时 token 预算、Tier 1 自动执行器和有效性实测。

@@ -244,8 +244,11 @@ python scripts/analyze_session_metrics.py --project-dir <claude项目目录> --h
 | [06-official-frontend-skills-installation.md](docs/06-official-frontend-skills-installation.md) | 官方前端 skills 本地化来源与保留流程 | 理解本地前端 workflow 来源时 |
 | [07-critical-review.md](docs/07-critical-review.md) | 框架独立批判性评估（短板 + 改进，标注已补项） | 审视框架短板 / 规划后续改进时 |
 | [08-evaluation-strategy.md](docs/08-evaluation-strategy.md) | 评测体系分层落地 + 框架特有难点 | 规划 / 落地 skill 评测时 |
+| [09-personal-knowledge-base-plan.md](docs/09-personal-knowledge-base-plan.md) | 个人知识库分层、索引和治理计划 | 规划跨项目知识读写时 |
 | [10-harness-engineering-practices.md](docs/10-harness-engineering-practices.md) | 两篇 Harness Engineering 实践分析 + 框架吸收建议 | 规划框架下一轮演进时 |
 | [11-session-telemetry.md](docs/11-session-telemetry.md) | 会话遥测体系：三层架构、第一层设计决策与指标解读边界 | 分析执行耗时 / token 数据，或改 review 报告模板前 |
+| [12-development-workflow-absorption-audit.md](docs/12-development-workflow-absorption-audit.md) | 研发工作流吸收情况与实现证据审计 | 判断外部方法是否真正落地时 |
+| [13-agentic-workflow-engine-references.md](docs/13-agentic-workflow-engine-references.md) | 独立 Agentic Workflow Engine 候选与渐进式演进方案 | 设计副作用编排层和持久化运行时时 |
 
 架构决策记录：
 
