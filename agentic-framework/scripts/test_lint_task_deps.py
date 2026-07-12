@@ -78,6 +78,17 @@ class TaskDependencyTest(unittest.TestCase):
         errors = lint_task_deps.field_errors(lint_task_deps.parse_tasks(text))
         self.assertEqual([], errors)
 
+    def test_main_parses_tasks_md_with_bom_prefix(self) -> None:
+        text = (
+            "### 任务 1：A\n- depends_on: []\n- review_profile: standard\n"
+            "- context_files:\n- verification:\n- artifacts:\n"
+            "- 状态: 未开始\n"
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            tasks_file = Path(temp_dir) / "tasks.md"
+            tasks_file.write_bytes(text.encode("utf-8-sig"))
+            self.assertEqual(0, lint_task_deps.main([str(tasks_file)]))
+
 
 if __name__ == "__main__":
     unittest.main()
